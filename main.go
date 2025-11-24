@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 	"time"
-	
+
 	"smarthome-backend/config"
 	"smarthome-backend/internal/handler"
 	"smarthome-backend/internal/mqtt"
@@ -39,14 +39,29 @@ func main() {
 	gasSvc := service.NewGasService(gasRepo)
 	gasHandler := handler.NewGasHandler(gasSvc)
 
+	tempRepo := repository.NewTempRepository(db)
+	tempSvc := service.NewTempService(tempRepo)
+	tempHandler := handler.NewTempHandler(tempSvc)
+
+	humidRepo := repository.NewHumidRepository(db)
+	humidSvc := service.NewHumidService(humidRepo)
+	humidHandler := handler.NewHumidHandler(humidSvc)
+
+	lightRepo := repository.NewLightRepository(db)
+	lightSvc := service.NewLightService(lightRepo)
+	lightHandler := handler.NewLightHandler(lightSvc)
+
 	// 5. Init MQTT Handler
-	mqttH := mqtt.NewMQTTHandler(gasSvc, wsHub)
+	mqttH := mqtt.NewMQTTHandler(gasSvc, tempSvc, humidSvc, lightSvc, wsHub)
 	mqttH.SetupRoutes(mqttClient)
 
 	// 6. Router
 	cfg := router.AppConfig{
-		GasHandler: gasHandler,
-		WsHub:      wsHub,
+		GasHandler:   gasHandler,
+		TempHandler:  tempHandler,
+		HumidHandler: humidHandler,
+		LightHandler: lightHandler,
+		WsHub:        wsHub,
 	}
 	r := router.InitRouter(cfg)
 
