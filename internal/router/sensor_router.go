@@ -1,20 +1,43 @@
 package router
 
 import (
-	"github.com/gin-gonic/gin"
 	"smarthome-backend/internal/handler"
+	"smarthome-backend/internal/websocket"
+
+	"github.com/gin-gonic/gin"
 )
 
-func InitRouter() *gin.Engine {
-	r := gin.Default() // inisialisasi router Gin
+type AppConfig struct {
+	GasHandler   *handler.GasHandler
+	TempHandler  *handler.TempHandler
+	HumidHandler *handler.HumidHandler
+	LightHandler *handler.LightHandler
+	WsHub        *websocket.Hub
+}
 
-	// Kelompokkan semua endpoint 
-	api := r.Group("/api/sensor")
+func InitRouter(cfg AppConfig) *gin.Engine {
+	r := gin.Default()
+
+	api := r.Group("/api")
 	{
-		// Endpoint untuk sensor
-		api.POST("/data", handler.LogEnvironmentData)  // kirim data sensor dari ESP32
-		api.GET("/data/latest", handler.GetLatestData) // ambil data sensor terakhir
-	}
+		// Gas endpoints
+		api.POST("/gas", cfg.GasHandler.Create)
+		api.GET("/gas", cfg.GasHandler.GetAll)
 
+		// Temperature endpoints
+		api.POST("/temperature", cfg.TempHandler.Create)
+		api.GET("/temperature", cfg.TempHandler.GetAll)
+
+		// Humidity endpoints
+		api.POST("/humidity", cfg.HumidHandler.Create)
+		api.GET("/humidity", cfg.HumidHandler.GetAll)
+
+		// Light endpoints
+		api.POST("/light", cfg.LightHandler.Create)
+		api.GET("/light", cfg.LightHandler.GetAll)
+
+		// URL WebSocket
+		api.GET("/ws", cfg.WsHub.HandleWebSocket)
+	}
 	return r
 }
