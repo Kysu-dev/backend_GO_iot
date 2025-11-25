@@ -23,6 +23,7 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 		// Gas endpoints
 		api.POST("/gas", cfg.GasHandler.Create)
 		api.GET("/gas", cfg.GasHandler.GetAll)
+		api.GET("/gas/latest", cfg.GasHandler.GetLatest)
 
 		// Temperature endpoints
 		api.POST("/temperature", cfg.TempHandler.Create)

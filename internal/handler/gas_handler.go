@@ -30,3 +30,12 @@ func (h *GasHandler) GetAll(c *gin.Context) {
 	data, _ := h.svc.GetHistory(limit)
 	c.JSON(200, gin.H{"data": data})
 }
+
+func (h *GasHandler) GetLatest(c *gin.Context) {
+	data, err := h.svc.GetLatest()
+	if err != nil {
+		c.JSON(500, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(200, gin.H{"data": data})
+}	

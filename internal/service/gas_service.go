@@ -9,6 +9,7 @@ import (
 type GasService interface {
 	ProcessGas(ppm int) error
 	GetHistory(limit int) ([]models.SensorGas, error)
+	GetLatest() (*models.SensorGas, error)
 }
 
 type gasService struct {
@@ -21,8 +22,12 @@ func NewGasService(repo repository.GasRepository) GasService {
 
 func (s *gasService) ProcessGas(ppm int) error {
 	status := "normal"
-	if ppm > 500 { status = "warning" }
-	if ppm > 1000 { status = "danger" }
+	if ppm > 500 {
+		status = "warning"
+	}
+	if ppm > 1000 {
+		status = "danger"
+	}
 
 	data := models.SensorGas{
 		PPMValue:  ppm,
@@ -34,4 +39,9 @@ func (s *gasService) ProcessGas(ppm int) error {
 
 func (s *gasService) GetHistory(limit int) ([]models.SensorGas, error) {
 	return s.repo.GetAll(limit)
+}
+
+// function to get latest gas data
+func (s *gasService) GetLatest() (*models.SensorGas, error) {
+	return s.repo.GetLatest()
 }
