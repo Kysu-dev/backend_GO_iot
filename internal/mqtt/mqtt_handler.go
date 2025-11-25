@@ -121,8 +121,6 @@ func (h *MQTTHandler) handleLight(c mqtt.Client, m mqtt.Message) {
 	log.Printf("[MQTT] Light: %d lux (Saved & Broadcasted)", req.Lux)
 }
 
-// ==================== DEVICE STATUS HANDLERS ====================
-
 func (h *MQTTHandler) handleDoorStatus(c mqtt.Client, m mqtt.Message) {
 	var req struct {
 		Status string `json:"status"`
@@ -136,7 +134,7 @@ func (h *MQTTHandler) handleDoorStatus(c mqtt.Client, m mqtt.Message) {
 	// Broadcast to WebSocket
 	h.wsHub.BroadcastData(m.Payload())
 
-	log.Printf("[MQTT] Door: %s (method: %s)", req.Status, req.Method)
+	log.Printf("[MQTT] Door: %s via %s (Saved & Broadcasted)", req.Status, req.Method)
 }
 
 func (h *MQTTHandler) handleLampStatus(c mqtt.Client, m mqtt.Message) {
@@ -152,7 +150,7 @@ func (h *MQTTHandler) handleLampStatus(c mqtt.Client, m mqtt.Message) {
 	// Broadcast to WebSocket
 	h.wsHub.BroadcastData(m.Payload())
 
-	log.Printf("[MQTT] Lamp: %s (mode: %s)", req.Status, req.Mode)
+	log.Printf("[MQTT] Lamp: %s (%s mode) (Saved & Broadcasted)", req.Status, req.Mode)
 }
 
 func (h *MQTTHandler) handleCurtainStatus(c mqtt.Client, m mqtt.Message) {
@@ -168,5 +166,5 @@ func (h *MQTTHandler) handleCurtainStatus(c mqtt.Client, m mqtt.Message) {
 	// Broadcast to WebSocket
 	h.wsHub.BroadcastData(m.Payload())
 
-	log.Printf("[MQTT] Curtain: position %d%% (mode: %s)", req.Position, req.Mode)
+	log.Printf("[MQTT] Curtain: position %d%% (%s mode) (Saved & Broadcasted)", req.Position, req.Mode)
 }

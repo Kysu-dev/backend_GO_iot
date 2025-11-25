@@ -7,8 +7,8 @@ import (
 )
 
 type TempRepository interface {
-	Save(data *models.SensorTemp) error
-	GetAll(limit int) ([]models.SensorTemp, error)
+	Save(data *models.SensorTemperature) error
+	GetAll(limit int) ([]models.SensorTemperature, error)
 }
 
 type tempRepository struct {
@@ -20,14 +20,14 @@ func NewTempRepository(db *gorm.DB) TempRepository {
 }
 
 // Insert data
-func (r *tempRepository) Save(data *models.SensorTemp) error {
+func (r *tempRepository) Save(data *models.SensorTemperature) error {
 	query := "INSERT INTO sensor_temp (temperature, timestamp) VALUES (?, ?)"
 	return r.db.Exec(query, data.Temperature, data.Timestamp).Error
 }
 
 // Select all data with limit
-func (r *tempRepository) GetAll(limit int) ([]models.SensorTemp, error) {
-	var results []models.SensorTemp
+func (r *tempRepository) GetAll(limit int) ([]models.SensorTemperature, error) {
+	var results []models.SensorTemperature
 	query := "SELECT * FROM sensor_temp ORDER BY timestamp DESC LIMIT ?"
 	err := r.db.Raw(query, limit).Scan(&results).Error
 	return results, err
