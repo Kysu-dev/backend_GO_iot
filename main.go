@@ -82,6 +82,7 @@ func main() {
 	accessLogHandler := handler.NewAccessLogHandler(accessLogSvc)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
 	deviceControlHandler := handler.NewDeviceControlHandler(mqttClient)
+	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient)
 
 	// 8. Init MQTT Handler
 	mqttH := mqtt.NewMQTTHandler(
@@ -109,6 +110,7 @@ func main() {
 		AccessLogHandler:     accessLogHandler,
 		NotificationHandler:  notifHandler,
 		DeviceControlHandler: deviceControlHandler,
+		FaceHandler:          faceHandler,
 		WsHub:                wsHub,
 	}
 	r := router.InitRouter(routerCfg)

@@ -29,6 +29,9 @@ type AppConfig struct {
 	// Device Control Handler
 	DeviceControlHandler *handler.DeviceControlHandler
 
+	// Face Recognition Handler
+	FaceHandler *handler.FaceHandler
+
 	// WebSocket Hub
 	WsHub *websocket.Hub
 }
@@ -139,6 +142,15 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			notification.POST("/", cfg.NotificationHandler.Create)
 			notification.GET("/", cfg.NotificationHandler.GetAll)
 			notification.GET("/type/:type", cfg.NotificationHandler.GetByType)
+		}
+
+		// ==================== FACE RECOGNITION ENDPOINTS ====================
+		face := api.Group("/face")
+		{
+			face.POST("/recognize", cfg.FaceHandler.RecognizeFace) // ESP32-CAM calls this
+			face.POST("/enroll", cfg.FaceHandler.EnrollFace)       // Enroll new face
+			face.POST("/reload", cfg.FaceHandler.ReloadFaces)      // Reload known faces
+			face.GET("/logs", cfg.FaceHandler.GetAccessLogs)       // Get access logs
 		}
 
 		// ==================== WEBSOCKET ENDPOINT ====================

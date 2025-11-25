@@ -31,7 +31,7 @@ func LoadConfig() *Config {
 		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
 		DBPort:     getEnv("DB_PORT", "3306"),
 		DBUser:     getEnv("DB_USER", "root"),
-		DBPassword: getEnv("DB_PASSWORD", ""),
+		DBPassword: getEnv("DB_PASSWORD", "superadmin123"),
 		DBName:     getEnv("DB_NAME", "smart_home_iot"),
 		ServerPort: getEnv("PORT", "8080"),
 		MQTTBroker: getEnv("MQTT_BROKER", "tcp://127.0.0.1:1883"),
