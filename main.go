@@ -17,54 +17,108 @@ import (
 )
 
 func main() {
-	// 1. Init Database (Dari Config)
+	log.Println("╔════════════════════════════════════════╗")
+	log.Println("║   Smart Home IoT Backend Server      ║")
+	log.Println("║         Starting...                   ║")
+	log.Println("╚════════════════════════════════════════╝")
+
+	// 1. Load Configuration
+	cfg := config.LoadConfig()
+
+	// 2. Init Database
 	db := config.InitDB()
 
-	// 2. Init MQTT Client (Langsung disini saja biar simple, atau buat file sendiri boleh)
+	// 3. Init MQTT Client
 	opts := mqttLib.NewClientOptions()
-	opts.AddBroker("tcp://127.0.0.1:1883")
+	opts.AddBroker(cfg.MQTTBroker)
 	opts.SetClientID("backend_service_" + fmt.Sprintf("%d", time.Now().Unix()))
+	opts.SetAutoReconnect(true)
+	opts.SetConnectRetry(true)
+
 	mqttClient := mqttLib.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatal("MQTT Fail:", token.Error())
+		log.Fatal("❌ MQTT Connection Failed:", token.Error())
 	}
-	log.Println("MQTT Connected!")
+	log.Println("✅ MQTT Connected!")
 
-	// 3. Init WebSocket Hub
+	// 4. Init WebSocket Hub
 	wsHub := websocket.NewHub()
 	go wsHub.Run()
+	log.Println("✅ WebSocket Hub Running")
 
-	// 4. Init Layers
+	// 5. Init Repositories
 	gasRepo := repository.NewGasRepository(db)
-	gasSvc := service.NewGasService(gasRepo)
-	gasHandler := handler.NewGasHandler(gasSvc)
-
 	tempRepo := repository.NewTempRepository(db)
-	tempSvc := service.NewTempService(tempRepo)
-	tempHandler := handler.NewTempHandler(tempSvc)
-
 	humidRepo := repository.NewHumidRepository(db)
-	humidSvc := service.NewHumidService(humidRepo)
-	humidHandler := handler.NewHumidHandler(humidSvc)
-
 	lightRepo := repository.NewLightRepository(db)
-	lightSvc := service.NewLightService(lightRepo)
-	lightHandler := handler.NewLightHandler(lightSvc)
+	doorRepo := repository.NewDoorRepository(db)
+	lampRepo := repository.NewLampRepository(db)
+	curtainRepo := repository.NewCurtainRepository(db)
+	userRepo := repository.NewUserRepository(db)
+	accessLogRepo := repository.NewAccessLogRepository(db)
+	notifRepo := repository.NewNotificationRepository(db)
 
-	// 5. Init MQTT Handler
-	mqttH := mqtt.NewMQTTHandler(gasSvc, tempSvc, humidSvc, lightSvc, wsHub)
+	// 6. Init Services
+	gasSvc := service.NewGasService(gasRepo)
+	tempSvc := service.NewTempService(tempRepo)
+	humidSvc := service.NewHumidService(humidRepo)
+	lightSvc := service.NewLightService(lightRepo)
+	doorSvc := service.NewDoorService(doorRepo)
+	lampSvc := service.NewLampService(lampRepo)
+	curtainSvc := service.NewCurtainService(curtainRepo)
+	userSvc := service.NewUserService(userRepo)
+	accessLogSvc := service.NewAccessLogService(accessLogRepo)
+	notifSvc := service.NewNotificationService(notifRepo)
+
+	// 7. Init Handlers
+	gasHandler := handler.NewGasHandler(gasSvc)
+	tempHandler := handler.NewTempHandler(tempSvc)
+	humidHandler := handler.NewHumidHandler(humidSvc)
+	lightHandler := handler.NewLightHandler(lightSvc)
+	doorHandler := handler.NewDoorHandler(doorSvc)
+	lampHandler := handler.NewLampHandler(lampSvc)
+	curtainHandler := handler.NewCurtainHandler(curtainSvc)
+	userHandler := handler.NewUserHandler(userSvc)
+	accessLogHandler := handler.NewAccessLogHandler(accessLogSvc)
+	notifHandler := handler.NewNotificationHandler(notifSvc)
+	deviceControlHandler := handler.NewDeviceControlHandler(mqttClient)
+
+	// 8. Init MQTT Handler
+	mqttH := mqtt.NewMQTTHandler(
+		gasSvc,
+		tempSvc,
+		humidSvc,
+		lightSvc,
+		doorSvc,
+		lampSvc,
+		curtainSvc,
+		wsHub,
+	)
 	mqttH.SetupRoutes(mqttClient)
 
-	// 6. Router
-	cfg := router.AppConfig{
-		GasHandler:   gasHandler,
-		TempHandler:  tempHandler,
-		HumidHandler: humidHandler,
-		LightHandler: lightHandler,
-		WsHub:        wsHub,
+	// 9. Router Configuration
+	routerCfg := router.AppConfig{
+		GasHandler:           gasHandler,
+		TempHandler:          tempHandler,
+		HumidHandler:         humidHandler,
+		LightHandler:         lightHandler,
+		DoorHandler:          doorHandler,
+		LampHandler:          lampHandler,
+		CurtainHandler:       curtainHandler,
+		UserHandler:          userHandler,
+		AccessLogHandler:     accessLogHandler,
+		NotificationHandler:  notifHandler,
+		DeviceControlHandler: deviceControlHandler,
+		WsHub:                wsHub,
 	}
-	r := router.InitRouter(cfg)
+	r := router.InitRouter(routerCfg)
 
-	// 7. Run
-	r.Run(":8080")
+	// 10. Run Server
+	log.Println("\n╔════════════════════════════════════════╗")
+	log.Printf("║  🚀 Server running on port %s        ║\n", cfg.ServerPort)
+	log.Println("║  📱 API: http://localhost:" + cfg.ServerPort + "      ║")
+	log.Println("║  📡 MQTT: " + cfg.MQTTBroker + "     ║")
+	log.Println("╚════════════════════════════════════════╝\n")
+
+	r.Run(":" + cfg.ServerPort)
 }
