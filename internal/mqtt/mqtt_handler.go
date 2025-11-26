@@ -43,26 +43,66 @@ func NewMQTTHandler(
 }
 
 func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
-	// Sensor subscriptions
-	client.Subscribe("home/gas", 0, h.handleGas)
-	client.Subscribe("home/temperature", 0, h.handleTemperature)
-	client.Subscribe("home/humidity", 0, h.handleHumidity)
-	client.Subscribe("home/light", 0, h.handleLight)
+	// Sensor subscriptions with error checking
+	log.Println("🔄 Setting up MQTT subscriptions...")
+
+	if token := client.Subscribe("home/gas", 0, h.handleGas); token.Wait() && token.Error() != nil {
+		log.Printf("❌ Failed to subscribe to home/gas: %v", token.Error())
+	} else {
+		log.Println("✅ Subscribed to: home/gas")
+	}
+
+	if token := client.Subscribe("home/temperature", 0, h.handleTemperature); token.Wait() && token.Error() != nil {
+		log.Printf("❌ Failed to subscribe to home/temperature: %v", token.Error())
+	} else {
+		log.Println("✅ Subscribed to: home/temperature")
+	}
+
+	if token := client.Subscribe("home/humidity", 0, h.handleHumidity); token.Wait() && token.Error() != nil {
+		log.Printf("❌ Failed to subscribe to home/humidity: %v", token.Error())
+	} else {
+		log.Println("✅ Subscribed to: home/humidity")
+	}
+
+	if token := client.Subscribe("home/light", 0, h.handleLight); token.Wait() && token.Error() != nil {
+		log.Printf("❌ Failed to subscribe to home/light: %v", token.Error())
+	} else {
+		log.Println("✅ Subscribed to: home/light")
+	}
 
 	// Device status subscriptions
-	client.Subscribe("home/door/status", 0, h.handleDoorStatus)
-	client.Subscribe("home/lamp/status", 0, h.handleLampStatus)
-	client.Subscribe("home/curtain/status", 0, h.handleCurtainStatus)
+	if token := client.Subscribe("home/door/status", 0, h.handleDoorStatus); token.Wait() && token.Error() != nil {
+		log.Printf("❌ Failed to subscribe to home/door/status: %v", token.Error())
+	} else {
+		log.Println("✅ Subscribed to: home/door/status")
+	}
+
+	if token := client.Subscribe("home/lamp/status", 0, h.handleLampStatus); token.Wait() && token.Error() != nil {
+		log.Printf("❌ Failed to subscribe to home/lamp/status: %v", token.Error())
+	} else {
+		log.Println("✅ Subscribed to: home/lamp/status")
+	}
+
+	if token := client.Subscribe("home/curtain/status", 0, h.handleCurtainStatus); token.Wait() && token.Error() != nil {
+		log.Printf("❌ Failed to subscribe to home/curtain/status: %v", token.Error())
+	} else {
+		log.Println("✅ Subscribed to: home/curtain/status")
+	}
 
 	log.Println("✅ MQTT subscriptions setup complete")
 }
 
 func (h *MQTTHandler) handleGas(c mqtt.Client, m mqtt.Message) {
+	log.Printf("📩 Received MQTT on topic: %s, payload: %s", m.Topic(), string(m.Payload()))
+
 	// 1. Parsing Data dari Sensor
 	var req struct {
 		PPM int `json:"ppm"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("❌ Failed to parse gas data: %v", err)
+		return
+	}
 
 	// 2. Simpan ke Database
 	go h.gasSvc.ProcessGas(req.PPM)
@@ -74,11 +114,16 @@ func (h *MQTTHandler) handleGas(c mqtt.Client, m mqtt.Message) {
 }
 
 func (h *MQTTHandler) handleTemperature(c mqtt.Client, m mqtt.Message) {
+	log.Printf("📩 Received MQTT on topic: %s, payload: %s", m.Topic(), string(m.Payload()))
+
 	// 1. Parsing Data dari Sensor
 	var req struct {
 		Temperature float64 `json:"temperature"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("❌ Failed to parse temperature data: %v", err)
+		return
+	}
 
 	// 2. Simpan ke Database
 	go h.tempSvc.ProcessTemp(req.Temperature)
