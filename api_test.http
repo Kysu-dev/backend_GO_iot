@@ -1,0 +1,618 @@
+### Smart Home IoT Backend API Testing
+### REST Client for VS Code
+### Base URL: http://localhost:8080
+
+@baseUrl = http://localhost:8080
+@apiUrl = {{baseUrl}}/api
+
+########################################
+# HEALTH CHECK
+########################################
+
+### Health Check
+GET {{baseUrl}}/health
+Accept: application/json
+
+########################################
+# USER MANAGEMENT
+########################################
+
+### Register New User
+POST {{apiUrl}}/user/register
+Content-Type: application/json
+
+{
+  "name": "John Doe",
+  "email": "john.doe@example.com",
+  "password": "password123",
+  "role": "member"
+}
+
+### Register Admin User
+POST {{apiUrl}}/user/register
+Content-Type: application/json
+
+{
+  "name": "Admin User",
+  "email": "admin@smarthome.com",
+  "password": "admin123",
+  "role": "admin"
+}
+
+### Login User
+POST {{apiUrl}}/user/login
+Content-Type: application/json
+
+{
+  "email": "john.doe@example.com",
+  "password": "password123"
+}
+
+### Get All Users
+GET {{apiUrl}}/user/
+Accept: application/json
+
+### Get User by ID
+GET {{apiUrl}}/user/1
+Accept: application/json
+
+### Delete User
+DELETE {{apiUrl}}/user/2
+Accept: application/json
+
+########################################
+# SENSOR - TEMPERATURE
+########################################
+
+### Submit Temperature Data
+POST {{apiUrl}}/sensor/temperature
+Content-Type: application/json
+
+{
+  "temperature": 25.5
+}
+
+### Submit Temperature Data (Hot)
+POST {{apiUrl}}/sensor/temperature
+Content-Type: application/json
+
+{
+  "temperature": 32.8
+}
+
+### Submit Temperature Data (Cold)
+POST {{apiUrl}}/sensor/temperature
+Content-Type: application/json
+
+{
+  "temperature": 18.2
+}
+
+### Get All Temperature Data
+GET {{apiUrl}}/sensor/temperature
+Accept: application/json
+
+### Get Temperature History (Last 10)
+GET {{apiUrl}}/sensor/temperature?limit=10
+Accept: application/json
+
+########################################
+# SENSOR - HUMIDITY
+########################################
+
+### Submit Humidity Data
+POST {{apiUrl}}/sensor/humidity
+Content-Type: application/json
+
+{
+  "humidity": 65.0
+}
+
+### Submit Humidity Data (High)
+POST {{apiUrl}}/sensor/humidity
+Content-Type: application/json
+
+{
+  "humidity": 85.5
+}
+
+### Submit Humidity Data (Low)
+POST {{apiUrl}}/sensor/humidity
+Content-Type: application/json
+
+{
+  "humidity": 45.2
+}
+
+### Get All Humidity Data
+GET {{apiUrl}}/sensor/humidity
+Accept: application/json
+
+########################################
+# SENSOR - LIGHT
+########################################
+
+### Submit Light Data (Bright)
+POST {{apiUrl}}/sensor/light
+Content-Type: application/json
+
+{
+  "lux": 850
+}
+
+### Submit Light Data (Normal)
+POST {{apiUrl}}/sensor/light
+Content-Type: application/json
+
+{
+  "lux": 350
+}
+
+### Submit Light Data (Dark)
+POST {{apiUrl}}/sensor/light
+Content-Type: application/json
+
+{
+  "lux": 50
+}
+
+### Get All Light Data
+GET {{apiUrl}}/sensor/light
+Accept: application/json
+
+########################################
+# SENSOR - GAS
+########################################
+
+### Submit Gas Data (Normal)
+POST {{apiUrl}}/sensor/gas
+Content-Type: application/json
+
+{
+  "ppm": 120
+}
+
+### Submit Gas Data (Warning)
+POST {{apiUrl}}/sensor/gas
+Content-Type: application/json
+
+{
+  "ppm": 350
+}
+
+### Submit Gas Data (Danger)
+POST {{apiUrl}}/sensor/gas
+Content-Type: application/json
+
+{
+  "ppm": 550
+}
+
+### Get All Gas Data
+GET {{apiUrl}}/sensor/gas
+Accept: application/json
+
+########################################
+# DEVICE - DOOR STATUS
+########################################
+
+### Create Door Status (Locked)
+POST {{apiUrl}}/device/door
+Content-Type: application/json
+
+{
+  "status": "locked",
+  "method": "remote"
+}
+
+### Create Door Status (Unlocked)
+POST {{apiUrl}}/device/door
+Content-Type: application/json
+
+{
+  "status": "unlocked",
+  "method": "fingerprint"
+}
+
+### Get Latest Door Status
+GET {{apiUrl}}/device/door/latest
+Accept: application/json
+
+### Get Door History
+GET {{apiUrl}}/device/door/history
+Accept: application/json
+
+########################################
+# DEVICE - LAMP STATUS
+########################################
+
+### Create Lamp Status (On)
+POST {{apiUrl}}/device/lamp
+Content-Type: application/json
+
+{
+  "status": "on",
+  "mode": "manual"
+}
+
+### Create Lamp Status (Off)
+POST {{apiUrl}}/device/lamp
+Content-Type: application/json
+
+{
+  "status": "off",
+  "mode": "manual"
+}
+
+### Create Lamp Status (Auto Mode)
+POST {{apiUrl}}/device/lamp
+Content-Type: application/json
+
+{
+  "status": "on",
+  "mode": "auto"
+}
+
+### Get Latest Lamp Status
+GET {{apiUrl}}/device/lamp/latest
+Accept: application/json
+
+### Get Lamp History
+GET {{apiUrl}}/device/lamp/history
+Accept: application/json
+
+########################################
+# DEVICE - CURTAIN STATUS
+########################################
+
+### Create Curtain Status (Open)
+POST {{apiUrl}}/device/curtain
+Content-Type: application/json
+
+{
+  "position": 100,
+  "mode": "manual"
+}
+
+### Create Curtain Status (Half Open)
+POST {{apiUrl}}/device/curtain
+Content-Type: application/json
+
+{
+  "position": 50,
+  "mode": "manual"
+}
+
+### Create Curtain Status (Closed)
+POST {{apiUrl}}/device/curtain
+Content-Type: application/json
+
+{
+  "position": 0,
+  "mode": "manual"
+}
+
+### Create Curtain Status (Auto Mode)
+POST {{apiUrl}}/device/curtain
+Content-Type: application/json
+
+{
+  "position": 75,
+  "mode": "auto"
+}
+
+### Get Latest Curtain Status
+GET {{apiUrl}}/device/curtain/latest
+Accept: application/json
+
+### Get Curtain History
+GET {{apiUrl}}/device/curtain/history
+Accept: application/json
+
+########################################
+# DEVICE CONTROL (MQTT Publish)
+########################################
+
+### Control Device (Universal)
+POST {{apiUrl}}/control/device
+Content-Type: application/json
+
+{
+  "device": "door",
+  "action": "unlock"
+}
+
+### Control Door (Unlock)
+POST {{apiUrl}}/control/door
+Content-Type: application/json
+
+{
+  "action": "unlock"
+}
+
+### Control Door (Lock)
+POST {{apiUrl}}/control/door
+Content-Type: application/json
+
+{
+  "action": "lock"
+}
+
+### Control Lamp (Turn On)
+POST {{apiUrl}}/control/lamp
+Content-Type: application/json
+
+{
+  "action": "on",
+  "mode": "manual"
+}
+
+### Control Lamp (Turn Off)
+POST {{apiUrl}}/control/lamp
+Content-Type: application/json
+
+{
+  "action": "off",
+  "mode": "manual"
+}
+
+### Control Curtain (Open)
+POST {{apiUrl}}/control/curtain
+Content-Type: application/json
+
+{
+  "action": "open",
+  "position": 100
+}
+
+### Control Curtain (Close)
+POST {{apiUrl}}/control/curtain
+Content-Type: application/json
+
+{
+  "action": "close",
+  "position": 0
+}
+
+########################################
+# ACCESS LOG
+########################################
+
+### Create Access Log (Success - Fingerprint)
+POST {{apiUrl}}/access-log/
+Content-Type: application/json
+
+{
+  "user_id": 1,
+  "method": "fingerprint",
+  "status": "success"
+}
+
+### Create Access Log (Success - PIN)
+POST {{apiUrl}}/access-log/
+Content-Type: application/json
+
+{
+  "user_id": 1,
+  "method": "pin",
+  "status": "success"
+}
+
+### Create Access Log (Failed - Unknown)
+POST {{apiUrl}}/access-log/
+Content-Type: application/json
+
+{
+  "method": "unknown",
+  "status": "failed"
+}
+
+### Get All Access Logs
+GET {{apiUrl}}/access-log/
+Accept: application/json
+
+### Get Access Logs by User ID
+GET {{apiUrl}}/access-log/user/1
+Accept: application/json
+
+### Get Access Logs by Status (Success)
+GET {{apiUrl}}/access-log/status/success
+Accept: application/json
+
+### Get Access Logs by Status (Failed)
+GET {{apiUrl}}/access-log/status/failed
+Accept: application/json
+
+########################################
+# NOTIFICATIONS
+########################################
+
+### Create Notification (Gas Alert)
+POST {{apiUrl}}/notification/
+Content-Type: application/json
+
+{
+  "title": "Gas Alert!",
+  "message": "Gas level detected: 450 ppm. Please check immediately!",
+  "type": "gas"
+}
+
+### Create Notification (Door Alert)
+POST {{apiUrl}}/notification/
+Content-Type: application/json
+
+{
+  "title": "Door Opened",
+  "message": "Front door was opened by John Doe",
+  "type": "door"
+}
+
+### Create Notification (Intruder Alert)
+POST {{apiUrl}}/notification/
+Content-Type: application/json
+
+{
+  "title": "Intruder Detected!",
+  "message": "Unknown person detected at front door",
+  "type": "intruder"
+}
+
+### Create Notification (System)
+POST {{apiUrl}}/notification/
+Content-Type: application/json
+
+{
+  "title": "System Update",
+  "message": "Smart home system updated to v1.2.0",
+  "type": "system"
+}
+
+### Get All Notifications
+GET {{apiUrl}}/notification/
+Accept: application/json
+
+### Get Notifications by Type (Gas)
+GET {{apiUrl}}/notification/type/gas
+Accept: application/json
+
+### Get Notifications by Type (Door)
+GET {{apiUrl}}/notification/type/door
+Accept: application/json
+
+### Get Notifications by Type (Intruder)
+GET {{apiUrl}}/notification/type/intruder
+Accept: application/json
+
+########################################
+# FACE RECOGNITION
+########################################
+
+### Face Recognition - Test (No real image)
+# Note: Requires Python service running on port 5000
+POST {{apiUrl}}/face/recognize
+Content-Type: application/json
+
+{
+  "image": "base64_encoded_image_here"
+}
+
+### Face Enrollment - Test (No real image)
+# Note: Requires Python service running on port 5000
+POST {{apiUrl}}/face/enroll
+Content-Type: application/json
+
+{
+  "user_id": 1,
+  "name": "John Doe",
+  "image": "base64_encoded_image_here"
+}
+
+### Reload Known Faces
+POST {{apiUrl}}/face/reload
+Accept: application/json
+
+### Get Face Recognition Access Logs
+GET {{apiUrl}}/face/logs
+Accept: application/json
+
+########################################
+# BATCH TESTING - Simulate ESP32 Sensors
+########################################
+
+### Simulate ESP32 Sending All Sensor Data (Run in sequence)
+POST {{apiUrl}}/sensor/temperature
+Content-Type: application/json
+
+{
+  "temperature": 26.5
+}
+
+###
+POST {{apiUrl}}/sensor/humidity
+Content-Type: application/json
+
+{
+  "humidity": 68.0
+}
+
+###
+POST {{apiUrl}}/sensor/light
+Content-Type: application/json
+
+{
+  "lux": 420
+}
+
+###
+POST {{apiUrl}}/sensor/gas
+Content-Type: application/json
+
+{
+  "ppm": 150
+}
+
+########################################
+# DASHBOARD DATA (Simulated)
+########################################
+
+### Get Latest Sensor Readings (All)
+GET {{apiUrl}}/sensor/temperature
+Accept: application/json
+
+###
+GET {{apiUrl}}/sensor/humidity
+Accept: application/json
+
+###
+GET {{apiUrl}}/sensor/light
+Accept: application/json
+
+###
+GET {{apiUrl}}/sensor/gas
+Accept: application/json
+
+### Get Latest Device Status (All)
+GET {{apiUrl}}/device/door/latest
+Accept: application/json
+
+###
+GET {{apiUrl}}/device/lamp/latest
+Accept: application/json
+
+###
+GET {{apiUrl}}/device/curtain/latest
+Accept: application/json
+
+########################################
+# ERROR TESTING
+########################################
+
+### Test 404 - Invalid Endpoint
+GET {{apiUrl}}/invalid/endpoint
+Accept: application/json
+
+### Test 400 - Invalid JSON
+POST {{apiUrl}}/sensor/temperature
+Content-Type: application/json
+
+{
+  "invalid_field": "test"
+}
+
+### Test 400 - Missing Required Field
+POST {{apiUrl}}/user/register
+Content-Type: application/json
+
+{
+  "name": "Test User"
+}
+
+### Test 400 - Invalid Email Format
+POST {{apiUrl}}/user/register
+Content-Type: application/json
+
+{
+  "name": "Test User",
+  "email": "invalid-email",
+  "password": "test123"
+}

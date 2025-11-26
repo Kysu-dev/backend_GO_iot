@@ -68,6 +68,7 @@ func (h *DeviceControlHandler) Control(c *gin.Context) {
 func (h *DeviceControlHandler) ControlDoor(c *gin.Context) {
 	var req struct {
 		Action string `json:"action" binding:"required,oneof=lock unlock"`
+		Method string `json:"method"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -75,7 +76,15 @@ func (h *DeviceControlHandler) ControlDoor(c *gin.Context) {
 		return
 	}
 
-	payload, _ := json.Marshal(map[string]string{"action": req.Action})
+	// Default method if not provided
+	if req.Method == "" {
+		req.Method = "remote"
+	}
+
+	payload, _ := json.Marshal(map[string]string{
+		"action": req.Action,
+		"method": req.Method,
+	})
 	token := h.mqttClient.Publish("home/door/control", 0, false, payload)
 	token.Wait()
 
