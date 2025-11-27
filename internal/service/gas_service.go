@@ -21,8 +21,8 @@ func NewGasService(repo repository.GasRepository) GasService {
 
 func (s *gasService) ProcessGas(ppm int) error {
 	status := "normal"
-	if ppm > 500 { status = "warning" }
-	if ppm > 1000 { status = "danger" }
+	if ppm > 200 { status = "warning" }
+	if ppm > 500 { status = "danger" }
 
 	data := models.SensorGas{
 		PPMValue:  ppm,
