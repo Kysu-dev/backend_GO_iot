@@ -28,7 +28,7 @@ func (r *humidRepository) Save(data *models.SensorHumidity) error {
 // Select all data with limit
 func (r *humidRepository) GetAll(limit int) ([]models.SensorHumidity, error) {
 	var results []models.SensorHumidity
-	query := "SELECT * FROM sensor_humid ORDER BY timestamp DESC LIMIT 1"
+	query := "SELECT * FROM sensor_humidity ORDER BY timestamp DESC LIMIT ?"
 	err := r.db.Raw(query, limit).Scan(&results).Error
 	return results, err
 }

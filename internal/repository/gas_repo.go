@@ -27,7 +27,7 @@ func (r *gasRepository) Save(data *models.SensorGas) error {
 // Select all data with limit
 func (r *gasRepository) GetAll(limit int) ([]models.SensorGas, error) {
 	var results []models.SensorGas
-	query := "SELECT * FROM sensor_gas ORDER BY timestamp DESC LIMIT 1"
+	query := "SELECT * FROM sensor_gas ORDER BY timestamp DESC LIMIT ?"
 	err := r.db.Raw(query, limit).Scan(&results).Error
 	return results, err
 }

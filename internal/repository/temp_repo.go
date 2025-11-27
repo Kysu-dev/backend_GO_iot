@@ -28,7 +28,7 @@ func (r *tempRepository) Save(data *models.SensorTemperature) error {
 // Select all data with limit
 func (r *tempRepository) GetAll(limit int) ([]models.SensorTemperature, error) {
 	var results []models.SensorTemperature
-	query := "SELECT * FROM sensor_temp ORDER BY timestamp DESC LIMIT ?"
+	query := "SELECT * FROM sensor_temperature ORDER BY timestamp DESC LIMIT ?"
 	err := r.db.Raw(query, limit).Scan(&results).Error
 	return results, err
 }
