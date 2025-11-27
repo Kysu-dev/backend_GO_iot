@@ -16,6 +16,7 @@ type lampRepository struct {
 	db *gorm.DB
 }
 
+
 func NewLampRepository(db *gorm.DB) LampRepository {
 	return &lampRepository{db: db}
 }

@@ -10,6 +10,10 @@ type DoorStatus struct {
 	Timestamp time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"timestamp"`
 }
 
+func (DoorStatus) TableName() string {
+	return "door_status"
+}
+
 // DoorRequest for controlling door lock
 type DoorRequest struct {
 	Status string `json:"status" binding:"required,oneof=locked unlocked"`

@@ -10,6 +10,10 @@ type LampStatus struct {
 	Timestamp time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"timestamp"`
 }
 
+func (LampStatus) TableName() string {
+	return "lamp_status"
+}
+
 // LampRequest for controlling lamp
 type LampRequest struct {
 	Status string `json:"status" binding:"required,oneof=on off"`
