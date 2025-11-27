@@ -44,127 +44,161 @@ func NewMQTTHandler(
 
 func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
 	// Sensor subscriptions
-	client.Subscribe("home/gas", 0, h.handleGas)
-	client.Subscribe("home/temperature", 0, h.handleTemperature)
-	client.Subscribe("home/humidity", 0, h.handleHumidity)
-	client.Subscribe("home/light", 0, h.handleLight)
+	client.Subscribe("iotcihuy/home/gas", 0, h.handleGas)
+	client.Subscribe("iotcihuy/home/temperature", 0, h.handleTemperature)
+	client.Subscribe("iotcihuy/home/humidity", 0, h.handleHumidity)
+	client.Subscribe("iotcihuy/home/light", 0, h.handleLight)
 
 	// Device status subscriptions
-	client.Subscribe("home/door/status", 0, h.handleDoorStatus)
-	client.Subscribe("home/lamp/status", 0, h.handleLampStatus)
-	client.Subscribe("home/curtain/status", 0, h.handleCurtainStatus)
+	client.Subscribe("iotcihuy/home/door/status", 0, h.handleDoorStatus)
+	client.Subscribe("iotcihuy/home/lamp/status", 0, h.handleLampStatus)
+	client.Subscribe("iotcihuy/home/curtain/status", 0, h.handleCurtainStatus)
 
 	log.Println("✅ MQTT subscriptions setup complete")
 }
 
+// --- HANDLER SENSOR GAS ---
 func (h *MQTTHandler) handleGas(c mqtt.Client, m mqtt.Message) {
-	// 1. Parsing Data dari Sensor
 	var req struct {
 		PPM int `json:"ppm"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	// Cek Error JSON
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("[MQTT Error] Gas JSON Invalid: %v", err)
+		return
+	}
 
-	// 2. Simpan ke Database
-	go h.gasSvc.ProcessGas(req.PPM)
+	// Simpan DB (Cek Error DB)
+	go func() {
+		if err := h.gasSvc.ProcessGas(req.PPM); err != nil {
+			log.Printf("[DB Error] Gagal simpan Gas: %v", err)
+		}
+	}()
 
-	// 3. KIRIM KE WEBSOCKET (REALTIME)
+	// Broadcast
 	h.wsHub.BroadcastData(m.Payload())
-
-	log.Printf("[MQTT] Gas: %d (Saved & Broadcasted)", req.PPM)
+	log.Printf("[MQTT] Gas: %d", req.PPM)
 }
 
+// --- HANDLER TEMPERATURE ---
 func (h *MQTTHandler) handleTemperature(c mqtt.Client, m mqtt.Message) {
-	// 1. Parsing Data dari Sensor
 	var req struct {
 		Temperature float64 `json:"temperature"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("[MQTT Error] Temp JSON Invalid: %v", err)
+		return
+	}
 
-	// 2. Simpan ke Database
-	go h.tempSvc.ProcessTemp(req.Temperature)
+	go func() {
+		if err := h.tempSvc.ProcessTemp(req.Temperature); err != nil {
+			log.Printf("[DB Error] Gagal simpan Temp: %v", err)
+		}
+	}()
 
-	// 3. KIRIM KE WEBSOCKET (REALTIME)
 	h.wsHub.BroadcastData(m.Payload())
-
-	log.Printf("[MQTT] Temperature: %.2f (Saved & Broadcasted)", req.Temperature)
+	log.Printf("[MQTT] Temperature: %.2f", req.Temperature)
 }
 
+// --- HANDLER HUMIDITY ---
 func (h *MQTTHandler) handleHumidity(c mqtt.Client, m mqtt.Message) {
-	// 1. Parsing Data dari Sensor
 	var req struct {
 		Humidity float64 `json:"humidity"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("[MQTT Error] Humid JSON Invalid: %v", err)
+		return
+	}
 
-	// 2. Simpan ke Database
-	go h.humidSvc.ProcessHumid(req.Humidity)
+	go func() {
+		if err := h.humidSvc.ProcessHumid(req.Humidity); err != nil {
+			log.Printf("[DB Error] Gagal simpan Humid: %v", err)
+		}
+	}()
 
-	// 3. KIRIM KE WEBSOCKET (REALTIME)
 	h.wsHub.BroadcastData(m.Payload())
-
-	log.Printf("[MQTT] Humidity: %.2f (Saved & Broadcasted)", req.Humidity)
+	log.Printf("[MQTT] Humidity: %.2f", req.Humidity)
 }
 
+// --- HANDLER LIGHT ---
 func (h *MQTTHandler) handleLight(c mqtt.Client, m mqtt.Message) {
-	// 1. Parsing Data dari Sensor
 	var req struct {
 		Lux int `json:"lux"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("[MQTT Error] Light JSON Invalid: %v", err)
+		return
+	}
 
-	// 2. Simpan ke Database
-	go h.lightSvc.ProcessLight(req.Lux)
+	go func() {
+		if err := h.lightSvc.ProcessLight(req.Lux); err != nil {
+			log.Printf("[DB Error] Gagal simpan Light: %v", err)
+		}
+	}()
 
-	// 3. KIRIM KE WEBSOCKET (REALTIME)
 	h.wsHub.BroadcastData(m.Payload())
-
-	log.Printf("[MQTT] Light: %d lux (Saved & Broadcasted)", req.Lux)
+	log.Printf("[MQTT] Light: %d", req.Lux)
 }
 
+// --- HANDLER DOOR ---
 func (h *MQTTHandler) handleDoorStatus(c mqtt.Client, m mqtt.Message) {
 	var req struct {
 		Status string `json:"status"`
 		Method string `json:"method"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("[MQTT Error] Door JSON Invalid: %v", err)
+		return
+	}
 
-	// Save to database
-	go h.doorSvc.ProcessDoor(req.Status, req.Method)
+	go func() {
+		if err := h.doorSvc.ProcessDoor(req.Status, req.Method); err != nil {
+			log.Printf("[DB Error] Gagal simpan Door: %v", err)
+		}
+	}()
 
-	// Broadcast to WebSocket
 	h.wsHub.BroadcastData(m.Payload())
-
-	log.Printf("[MQTT] Door: %s via %s (Saved & Broadcasted)", req.Status, req.Method)
+	log.Printf("[MQTT] Door: %s via %s", req.Status, req.Method)
 }
 
+// --- HANDLER LAMP ---
 func (h *MQTTHandler) handleLampStatus(c mqtt.Client, m mqtt.Message) {
 	var req struct {
 		Status string `json:"status"`
 		Mode   string `json:"mode"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("[MQTT Error] Lamp JSON Invalid: %v", err)
+		return
+	}
 
-	// Save to database
-	go h.lampSvc.ProcessLamp(req.Status, req.Mode)
+	go func() {
+		if err := h.lampSvc.ProcessLamp(req.Status, req.Mode); err != nil {
+			log.Printf("[DB Error] Gagal simpan Lamp: %v", err)
+		}
+	}()
 
-	// Broadcast to WebSocket
 	h.wsHub.BroadcastData(m.Payload())
-
-	log.Printf("[MQTT] Lamp: %s (%s mode) (Saved & Broadcasted)", req.Status, req.Mode)
+	log.Printf("[MQTT] Lamp: %s (%s)", req.Status, req.Mode)
 }
 
+// --- HANDLER CURTAIN ---
 func (h *MQTTHandler) handleCurtainStatus(c mqtt.Client, m mqtt.Message) {
 	var req struct {
 		Position int    `json:"position"`
 		Mode     string `json:"mode"`
 	}
-	json.Unmarshal(m.Payload(), &req)
+	if err := json.Unmarshal(m.Payload(), &req); err != nil {
+		log.Printf("[MQTT Error] Curtain JSON Invalid: %v", err)
+		return
+	}
 
-	// Save to database
-	go h.curtainSvc.ProcessCurtain(req.Position, req.Mode)
+	go func() {
+		if err := h.curtainSvc.ProcessCurtain(req.Position, req.Mode); err != nil {
+			log.Printf("[DB Error] Gagal simpan Curtain: %v", err)
+		}
+	}()
 
-	// Broadcast to WebSocket
 	h.wsHub.BroadcastData(m.Payload())
-
-	log.Printf("[MQTT] Curtain: position %d%% (%s mode) (Saved & Broadcasted)", req.Position, req.Mode)
+	log.Printf("[MQTT] Curtain: %d%% (%s)", req.Position, req.Mode)
 }

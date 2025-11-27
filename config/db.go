@@ -18,6 +18,7 @@ type Config struct {
 	DBName     string
 	ServerPort string
 	MQTTBroker string
+	MQTTClientID string
 	JWTSecret  string
 }
 
@@ -31,10 +32,11 @@ func LoadConfig() *Config {
 		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
 		DBPort:     getEnv("DB_PORT", "3306"),
 		DBUser:     getEnv("DB_USER", "root"),
-		DBPassword: getEnv("DB_PASSWORD", "superadmin123"),
+		DBPassword: getEnv("DB_PASSWORD", ""),
 		DBName:     getEnv("DB_NAME", "smart_home_iot"),
 		ServerPort: getEnv("PORT", "8080"),
-		MQTTBroker: getEnv("MQTT_BROKER", "tcp://127.0.0.1:1883"),
+		MQTTBroker: getEnv("MQTT_BROKER", "tcp://broker.hivemq.com:1883"),
+		MQTTClientID: getEnv("MQTT_CLIENT_ID", "smarthome-backend"), 
 		JWTSecret:  getEnv("JWT_SECRET", "your-secret-key"),
 	}
 }

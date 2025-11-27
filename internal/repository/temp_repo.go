@@ -21,7 +21,7 @@ func NewTempRepository(db *gorm.DB) TempRepository {
 
 // Insert data
 func (r *tempRepository) Save(data *models.SensorTemperature) error {
-	query := "INSERT INTO sensor_temp (temperature, timestamp) VALUES (?, ?)"
+	query := "INSERT INTO sensor_temperature (temperature, timestamp) VALUES (?, ?)"
 	return r.db.Exec(query, data.Temperature, data.Timestamp).Error
 }
 
