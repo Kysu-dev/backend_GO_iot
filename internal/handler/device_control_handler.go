@@ -29,11 +29,11 @@ func (h *DeviceControlHandler) Control(c *gin.Context) {
 	var topic string
 	switch req.Device {
 	case "door":
-		topic = "home/door/control"
+		topic = "iotcihuy/home/door/control"
 	case "lamp":
-		topic = "home/lamp/control"
+		topic = "iotcihuy/home/lamp/control"
 	case "curtain":
-		topic = "home/curtain/control"
+		topic = "iotcihuy/home/curtain/control"
 	default:
 		c.JSON(400, gin.H{"success": false, "error": "Invalid device"})
 		return
@@ -85,7 +85,7 @@ func (h *DeviceControlHandler) ControlDoor(c *gin.Context) {
 		"action": req.Action,
 		"method": req.Method,
 	})
-	token := h.mqttClient.Publish("home/door/control", 0, false, payload)
+	token := h.mqttClient.Publish("iotcihuy/home/door/control", 0, false, payload)
 	token.Wait()
 
 	if token.Error() != nil {
@@ -113,7 +113,7 @@ func (h *DeviceControlHandler) ControlLamp(c *gin.Context) {
 		"action": req.Action,
 		"mode":   req.Mode,
 	})
-	token := h.mqttClient.Publish("home/lamp/control", 0, false, payload)
+	token := h.mqttClient.Publish("iotcihuy/home/lamp/control", 0, false, payload)
 	token.Wait()
 
 	if token.Error() != nil {
@@ -141,7 +141,7 @@ func (h *DeviceControlHandler) ControlCurtain(c *gin.Context) {
 		"position": req.Position,
 		"mode":     req.Mode,
 	})
-	token := h.mqttClient.Publish("home/curtain/control", 0, false, payload)
+	token := h.mqttClient.Publish("iotcihuy/home/curtain/control", 0, false, payload)
 	token.Wait()
 
 	if token.Error() != nil {

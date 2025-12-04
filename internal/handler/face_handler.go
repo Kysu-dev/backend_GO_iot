@@ -126,7 +126,7 @@ func (h *FaceHandler) RecognizeFace(c *gin.Context) {
 
 		payload, _ := json.Marshal(unlockPayload)
 
-		token := h.mqttClient.Publish("home/door/control", 0, false, payload)
+		token := h.mqttClient.Publish("iotcihuy/home/door/control", 0, false, payload)
 		token.Wait()
 
 		if token.Error() != nil {
