@@ -1,9 +1,9 @@
 package main
 
 import (
-	//"fmt"
+	"fmt"
 	"log"
-	// "time" // <-- HAPUS ini karena tidak digunakan
+	"time"
 
 	"smarthome-backend/config"
 	"smarthome-backend/internal/handler"
@@ -18,21 +18,21 @@ import (
 
 func main() {
 	log.Println("╔════════════════════════════════════════╗")
-	log.Println("║   Smart Home IoT Backend Server      ║")
-	log.Println("║         Starting...                   ║")
+	log.Println("║   Smart Home IoT Backend Server        ║")
+	log.Println("║           Starting...                  ║")
 	log.Println("╚════════════════════════════════════════╝")
 
-	// 1. Load Configuration
+	// 1. Load Config & DB
 	cfg := config.LoadConfig()
-
-	// 2. Init Database
 	db := config.InitDB()
 
-	// 4. Init WebSocket Hub
+	// 2. Init WebSocket
 	wsHub := websocket.NewHub()
 	go wsHub.Run()
-	go wsHub.StartPingTimer()
-	log.Println("✅ WebSocket Hub Running") // 5. Init Repositories
+	// go wsHub.StartPingTimer() // Aktifkan jika sudah implementasi ping
+	log.Println("✅ WebSocket Hub Running")
+
+	// 3. Init Repositories
 	gasRepo := repository.NewGasRepository(db)
 	tempRepo := repository.NewTempRepository(db)
 	humidRepo := repository.NewHumidRepository(db)
@@ -44,7 +44,7 @@ func main() {
 	accessLogRepo := repository.NewAccessLogRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
 
-	// 6. Init Services
+	// 4. Init Services
 	gasSvc := service.NewGasService(gasRepo)
 	tempSvc := service.NewTempService(tempRepo)
 	humidSvc := service.NewHumidService(humidRepo)
@@ -56,8 +56,25 @@ func main() {
 	accessLogSvc := service.NewAccessLogService(accessLogRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
 
-	// 8. Init MQTT Handler DULU (sebelum setup MQTT Client)
+	// =========================================================================
+	// 5. SETUP MQTT CLIENT (PINDAHKAN KE ATAS SINI AGAR BISA DIPAKAI HANDLER)
+	// =========================================================================
+	opts := mqttLib.NewClientOptions()
+	opts.AddBroker(cfg.MQTTBroker)
+	opts.SetClientID(cfg.MQTTClientID)
+	// Jika config kosong, fallback ke random ID
+	if cfg.MQTTClientID == "" {
+		opts.SetClientID("backend_srv_" + fmt.Sprintf("%d", time.Now().Unix()))
+	}
+	opts.SetCleanSession(true)
+	opts.SetAutoReconnect(true)
+
+	// Buat object client (TAPI BELUM CONNECT)
+	mqttClient := mqttLib.NewClient(opts) 
+
+	// 6. Init MQTT Handler (SEKARANG KITA BISA MASUKKAN mqttClient)
 	mqttH := mqtt.NewMQTTHandler(
+		mqttClient, // <--- PARAMETER INI YANG TADI KURANG!
 		gasSvc,
 		tempSvc,
 		humidSvc,
@@ -68,28 +85,26 @@ func main() {
 		wsHub,
 	)
 
-	// 3. Init MQTT Client (dipindah ke bawah setelah mqttH dibuat)
-	opts := mqttLib.NewClientOptions()
-	opts.AddBroker(cfg.MQTTBroker)
-	opts.SetClientID(cfg.MQTTClientID)
-	opts.SetCleanSession(true)
-	opts.SetAutoReconnect(true)
-
+	// 7. Setup Callback & Connect
+	// Kita set OnConnect handler setelah mqttH jadi, supaya bisa panggil SetupRoutes
 	opts.OnConnect = func(c mqttLib.Client) {
-		log.Println("✅ Connected to MQTT Broker (HiveMQ Public)")
-		mqttH.SetupRoutes(c) // Sekarang mqttH sudah terdefinisi
+		log.Println("✅ Connected to MQTT Broker")
+		mqttH.SetupRoutes(c)
 	}
-
 	opts.OnConnectionLost = func(c mqttLib.Client, err error) {
-		log.Printf("⚠️  MQTT Connection Lost: %v", err)
+		log.Printf("⚠️ MQTT Connection Lost: %v", err)
 	}
 
-	mqttClient := mqttLib.NewClient(opts)
+	// Karena kita mengubah opts setelah NewClient, kita perlu init ulang client
+	// ATAU cara paling gampang: Lakukan connect dan panggil SetupRoutes manual.
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 		log.Fatal("❌ MQTT Connection Failed:", token.Error())
 	}
+	// Panggil manual agar langsung subscribe saat start
+	mqttH.SetupRoutes(mqttClient) 
 
-	// 7. Init Handlers
+
+	// 8. Init Handlers (HTTP)
 	gasHandler := handler.NewGasHandler(gasSvc)
 	tempHandler := handler.NewTempHandler(tempSvc)
 	humidHandler := handler.NewHumidHandler(humidSvc)
@@ -100,6 +115,8 @@ func main() {
 	userHandler := handler.NewUserHandler(userSvc)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogSvc)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
+	
+	// deviceControlHandler butuh mqttClient juga
 	deviceControlHandler := handler.NewDeviceControlHandler(mqttClient)
 	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient)
 

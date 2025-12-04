@@ -10,6 +10,7 @@ import (
 )
 
 type MQTTHandler struct {
+	client     mqtt.Client // <--- 1. TAMBAHAN: Client disimpan disini agar bisa Publish
 	gasSvc     service.GasService
 	tempSvc    service.TempService
 	humidSvc   service.HumidService
@@ -20,36 +21,41 @@ type MQTTHandler struct {
 	wsHub      *websocket.Hub
 }
 
+// Update Constructor: Menerima 'client' sebagai parameter pertama
 func NewMQTTHandler(
-	gasSvc service.GasService,
-	tempSvc service.TempService,
-	humidSvc service.HumidService,
-	lightSvc service.LightService,
-	doorSvc service.DoorService,
-	lampSvc service.LampService,
-	curtainSvc service.CurtainService,
-	wsHub *websocket.Hub,
+	client mqtt.Client, // <--- 2. TAMBAHAN: Parameter Client
+	g service.GasService,
+	t service.TempService,
+	h service.HumidService,
+	l service.LightService,
+	d service.DoorService,
+	lamp service.LampService,
+	curtain service.CurtainService,
+	hub *websocket.Hub,
 ) *MQTTHandler {
 	return &MQTTHandler{
-		gasSvc:     gasSvc,
-		tempSvc:    tempSvc,
-		humidSvc:   humidSvc,
-		lightSvc:   lightSvc,
-		doorSvc:    doorSvc,
-		lampSvc:    lampSvc,
-		curtainSvc: curtainSvc,
-		wsHub:      wsHub,
+		client:     client, // <--- Simpan ke struct
+		gasSvc:     g,
+		tempSvc:    t,
+		humidSvc:   h,
+		lightSvc:   l,
+		doorSvc:    d,
+		lampSvc:    lamp,
+		curtainSvc: curtain,
+		wsHub:      hub,
 	}
 }
 
 func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
+	// Topic Subscribe (Mendengar Data dari ESP32)
 	topics := map[string]mqtt.MessageHandler{
-		"iotcihuy/home/temperature": h.handleTemperature,
-		"iotcihuy/home/humidity":    h.handleHumidity,
-		"iotcihuy/home/gas":         h.handleGas,
-		"iotcihuy/home/light":       h.handleLight,
-		"iotcihuy/home/lamp/status": h.handleLampStatus,
-		"iotcihuy/home/door/status": h.handleDoorStatus,
+		"iotcihuy/home/temperature":   h.handleTemperature,
+		"iotcihuy/home/humidity":      h.handleHumidity,
+		"iotcihuy/home/gas":           h.handleGas,
+		"iotcihuy/home/light":         h.handleLight,
+		"iotcihuy/home/lamp/status":   h.handleLampStatus,
+		"iotcihuy/home/door/status":   h.handleDoorStatus,
+		"iotcihuy/home/curtain/status": h.handleCurtainStatus,
 	}
 
 	for topic, handler := range topics {
@@ -60,7 +66,38 @@ func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
 	log.Println("✅ MQTT subscriptions setup complete")
 }
 
-// ==================== SENSOR HANDLERS ====================
+// ==================== PUBLISH FUNCTION (UNTUK TOMBOL PINTU) ====================
+
+// Fungsi ini dipanggil dari HTTP Handler (Button di klik)
+func (h *MQTTHandler) PublishDoorControl(action string) error {
+	// Topik khusus untuk memerintah ESP32
+	topic := "iotcihuy/home/door/control"
+
+	// Payload: {"action": "lock"} atau {"action": "unlock"}
+	payload := map[string]string{
+		"action": action,
+		"method": "remote",
+	}
+
+	jsonPayload, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	// PUBLISH ke MQTT
+	token := h.client.Publish(topic, 1, false, jsonPayload)
+	token.Wait()
+
+	if token.Error() != nil {
+		log.Printf("❌ Gagal Publish Door Control: %v", token.Error())
+		return token.Error()
+	}
+
+	log.Printf("📤 [MQTT Publish] Kirim Perintah Pintu: %s ke topik %s", action, topic)
+	return nil
+}
+
+// ==================== SENSOR HANDLERS (SUBSCRIBE) ====================
 
 func (h *MQTTHandler) handleTemperature(client mqtt.Client, msg mqtt.Message) {
 	var data struct {
@@ -73,23 +110,14 @@ func (h *MQTTHandler) handleTemperature(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	// ✅ Save to database using ProcessTemp
 	go func() {
 		if err := h.tempSvc.ProcessTemp(data.Temperature); err != nil {
 			log.Printf("❌ Error saving temperature: %v", err)
 		}
 	}()
 
+	h.wsHub.BroadcastData(msg.Payload())
 	log.Printf("[MQTT] Temperature: %.2f°C", data.Temperature)
-
-	// ⭐ Broadcast to WebSocket
-	wsData, _ := json.Marshal(map[string]interface{}{
-		"type":   "sensor_update",
-		"sensor": "temperature",
-		"value":  data.Temperature,
-		"unit":   data.Unit,
-	})
-	h.wsHub.BroadcastData(wsData)
 }
 
 func (h *MQTTHandler) handleHumidity(client mqtt.Client, msg mqtt.Message) {
@@ -103,23 +131,14 @@ func (h *MQTTHandler) handleHumidity(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	// ✅ Save to database using ProcessHumid
 	go func() {
 		if err := h.humidSvc.ProcessHumid(data.Humidity); err != nil {
 			log.Printf("❌ Error saving humidity: %v", err)
 		}
 	}()
 
+	h.wsHub.BroadcastData(msg.Payload())
 	log.Printf("[MQTT] Humidity: %.2f%%", data.Humidity)
-
-	// ⭐ Broadcast to WebSocket
-	wsData, _ := json.Marshal(map[string]interface{}{
-		"type":   "sensor_update",
-		"sensor": "humidity",
-		"value":  data.Humidity,
-		"unit":   data.Unit,
-	})
-	h.wsHub.BroadcastData(wsData)
 }
 
 func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
@@ -132,23 +151,14 @@ func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	// ✅ Save to database using ProcessGas
 	go func() {
 		if err := h.gasSvc.ProcessGas(data.PPM); err != nil {
 			log.Printf("❌ Error saving gas: %v", err)
 		}
 	}()
 
+	h.wsHub.BroadcastData(msg.Payload())
 	log.Printf("[MQTT] Gas: %d PPM", data.PPM)
-
-	// ⭐ Broadcast to WebSocket
-	wsData, _ := json.Marshal(map[string]interface{}{
-		"type":   "sensor_update",
-		"sensor": "gas",
-		"value":  data.PPM,
-		"unit":   data.Unit,
-	})
-	h.wsHub.BroadcastData(wsData)
 }
 
 func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
@@ -161,26 +171,17 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	// ✅ Save to database using ProcessLight
 	go func() {
 		if err := h.lightSvc.ProcessLight(data.Lux); err != nil {
 			log.Printf("❌ Error saving light: %v", err)
 		}
 	}()
 
+	h.wsHub.BroadcastData(msg.Payload())
 	log.Printf("[MQTT] Light: %d Lux", data.Lux)
-
-	// ⭐ Broadcast to WebSocket
-	wsData, _ := json.Marshal(map[string]interface{}{
-		"type":   "sensor_update",
-		"sensor": "light",
-		"value":  data.Lux,
-		"unit":   data.Unit,
-	})
-	h.wsHub.BroadcastData(wsData)
 }
 
-// ==================== DEVICE HANDLERS ====================
+// ==================== DEVICE HANDLERS (STATUS) ====================
 
 func (h *MQTTHandler) handleDoorStatus(c mqtt.Client, m mqtt.Message) {
 	var req struct {
@@ -198,7 +199,7 @@ func (h *MQTTHandler) handleDoorStatus(c mqtt.Client, m mqtt.Message) {
 		}
 	}()
 
-	// Broadcast dengan format WebSocket
+	// Broadcast format WebSocket khusus Device
 	wsData := map[string]interface{}{
 		"type":   "device_update",
 		"device": "door",
@@ -207,7 +208,8 @@ func (h *MQTTHandler) handleDoorStatus(c mqtt.Client, m mqtt.Message) {
 	}
 	jsonData, _ := json.Marshal(wsData)
 	h.wsHub.BroadcastData(jsonData)
-	log.Printf("[MQTT] Door: %s via %s", req.Status, req.Method)
+
+	log.Printf("[MQTT] Door Status: %s via %s", req.Status, req.Method)
 }
 
 func (h *MQTTHandler) handleLampStatus(c mqtt.Client, m mqtt.Message) {
@@ -226,7 +228,6 @@ func (h *MQTTHandler) handleLampStatus(c mqtt.Client, m mqtt.Message) {
 		}
 	}()
 
-	// Broadcast dengan format WebSocket
 	wsData := map[string]interface{}{
 		"type":   "device_update",
 		"device": "lamp",
@@ -254,7 +255,6 @@ func (h *MQTTHandler) handleCurtainStatus(c mqtt.Client, m mqtt.Message) {
 		}
 	}()
 
-	// Broadcast dengan format WebSocket
 	wsData := map[string]interface{}{
 		"type":     "device_update",
 		"device":   "curtain",
