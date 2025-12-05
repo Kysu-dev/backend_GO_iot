@@ -58,13 +58,13 @@ func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
 
 	for topic, handler := range topics {
 		if token := client.Subscribe(topic, 0, handler); token.Wait() && token.Error() != nil {
-			log.Printf("❌ Failed to subscribe to %s: %v", topic, token.Error())
+			log.Printf("[ERROR] Subscribe Failed | Topic: %s | Error: %v", topic, token.Error())
 		}
 	}
-	log.Println("✅ MQTT subscriptions setup complete")
+	log.Println("[INFO] MQTT Handler Ready. Waiting for data...")
 }
 
-// ==================== CONTROL FUNCTIONS (PUBLISH) ====================
+// ==================== CONTROL FUNCTIONS (OUTPUT) ====================
 
 func (h *MQTTHandler) PublishDoorControl(action string) error {
 	topic := "iotcihuy/home/door/control"
@@ -73,32 +73,38 @@ func (h *MQTTHandler) PublishDoorControl(action string) error {
 		"method": "remote",
 	}
 	jsonPayload, _ := json.Marshal(payload)
+	
 	token := h.client.Publish(topic, 1, false, jsonPayload)
 	token.Wait()
+	
+	if token.Error() == nil {
+		log.Printf("[OUTPUT] COMMAND DOOR | Action: %s | Target: ESP32", action)
+	}
 	return token.Error()
 }
 
-// --- BARU: Fungsi untuk Menyalakan/Mematikan Buzzer ---
 func (h *MQTTHandler) PublishBuzzerControl(action string) {
-	topic := "iotcihuy/home/buzzer/control" // Pastikan ESP32 subscribe topik ini
-
+	topic := "iotcihuy/home/buzzer/control"
 	payload := map[string]string{
-		"action": action, // "on" atau "off"
+		"action": action,
 		"source": "auto_alert",
 	}
-
 	jsonPayload, _ := json.Marshal(payload)
+	
 	token := h.client.Publish(topic, 0, false, jsonPayload)
 	token.Wait()
 
 	if token.Error() != nil {
-		log.Printf("❌ Gagal Kirim Perintah Buzzer: %v", token.Error())
+		log.Printf("[ERROR] Publish Buzzer Failed: %v", token.Error())
 	} else {
-		log.Printf("🚨 [AUTO ALERT] Buzzer %s (Dikirim ke MQTT)", action)
+		// Hanya log jika menyalakan buzzer (agar tidak spam saat off)
+		if action == "on" {
+			log.Printf("[ALERT]  !!! DANGER DETECTED !!! Sending BUZZER ON command.")
+		}
 	}
 }
 
-// ==================== SENSOR HANDLERS ====================
+// ==================== SENSOR HANDLERS (INPUT) ====================
 
 func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
 	var data struct {
@@ -106,64 +112,68 @@ func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
 		Unit string `json:"unit"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
-		log.Printf("❌ Error parsing gas: %v", err)
+		log.Printf("[ERROR] JSON Parse Gas Failed: %v", err)
 		return
 	}
 
 	go func() {
-		// 1. Simpan ke DB & Dapatkan Statusnya (Normal/Warning/Danger)
 		status, err := h.gasSvc.ProcessGas(data.PPM)
-		
 		if err != nil {
-			log.Printf("❌ Error saving gas: %v", err)
+			log.Printf("[ERROR] DB Save Gas Failed: %v", err)
 			return
 		}
 
-		// 2. LOGIC OTOMATISASI BUZZER
-		if status == "warning" || status == "danger" {
-			// Jika bahaya -> Nyalakan Buzzer
-			h.PublishBuzzerControl("on")
-		} else {
-			// Jika aman -> Matikan Buzzer (Opsional, agar tidak bunyi terus)
+		// Format Log Rapi
+		if status == "normal" {
+			log.Printf("[INPUT]  SENSOR GAS    | Value: %d PPM | Status: Normal  | DB: Saved", data.PPM)
 			h.PublishBuzzerControl("off")
+		} else {
+			// Log Mencolok untuk Bahaya
+			log.Printf("[INPUT]  SENSOR GAS    | Value: %d PPM | Status: %s (HIGH) | DB: Saved", data.PPM, status)
+			h.PublishBuzzerControl("on")
 		}
 	}()
 
 	h.wsHub.BroadcastData(msg.Payload())
-	log.Printf("[MQTT] Gas: %d PPM", data.PPM)
 }
-
-// --- Handler Lainnya TETAP SAMA (Tidak Berubah) ---
 
 func (h *MQTTHandler) handleTemperature(client mqtt.Client, msg mqtt.Message) {
 	var data struct {
 		Temperature float64 `json:"temperature"`
-		Unit        string  `json:"unit"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil { return }
+	
 	go h.tempSvc.ProcessTemp(data.Temperature)
 	h.wsHub.BroadcastData(msg.Payload())
+	
+	log.Printf("[INPUT]  SENSOR TEMP   | Value: %.1f C | DB: Saved", data.Temperature)
 }
 
 func (h *MQTTHandler) handleHumidity(client mqtt.Client, msg mqtt.Message) {
 	var data struct {
 		Humidity float64 `json:"humidity"`
-		Unit     string  `json:"unit"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil { return }
+	
 	go h.humidSvc.ProcessHumid(data.Humidity)
 	h.wsHub.BroadcastData(msg.Payload())
+	
+	log.Printf("[INPUT]  SENSOR HUMID  | Value: %.1f %% | DB: Saved", data.Humidity)
 }
 
 func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 	var data struct {
-		Lux  int    `json:"lux"`
-		Unit string `json:"unit"`
+		Lux int `json:"lux"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil { return }
+	
 	go h.lightSvc.ProcessLight(data.Lux)
 	h.wsHub.BroadcastData(msg.Payload())
+	
+	log.Printf("[INPUT]  SENSOR LIGHT  | Value: %d Lux | DB: Saved", data.Lux)
 }
+
+// ==================== DEVICE STATUS HANDLERS ====================
 
 func (h *MQTTHandler) handleDoorStatus(client mqtt.Client, msg mqtt.Message) {
 	var req struct {
@@ -172,7 +182,7 @@ func (h *MQTTHandler) handleDoorStatus(client mqtt.Client, msg mqtt.Message) {
 	}
 	if err := json.Unmarshal(msg.Payload(), &req); err != nil { return }
 	
-	// Auto Fix Method name for DB ENUM compatibility
+	// Auto Fix Method
 	if req.Method == "keypad" { req.Method = "pin" }
 	if req.Method == "app_button" { req.Method = "remote" }
 
@@ -184,6 +194,8 @@ func (h *MQTTHandler) handleDoorStatus(client mqtt.Client, msg mqtt.Message) {
 	}
 	jsonData, _ := json.Marshal(wsData)
 	h.wsHub.BroadcastData(jsonData)
+
+	log.Printf("[INPUT]  DEVICE DOOR   | Status: %s | Via: %s | DB: Saved", req.Status, req.Method)
 }
 
 func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
@@ -192,6 +204,7 @@ func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
 		Mode   string `json:"mode"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &req); err != nil { return }
+	
 	go h.lampSvc.ProcessLamp(req.Status, req.Mode)
 	
 	wsData := map[string]interface{}{
@@ -200,6 +213,8 @@ func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
 	}
 	jsonData, _ := json.Marshal(wsData)
 	h.wsHub.BroadcastData(jsonData)
+	
+	log.Printf("[INPUT]  DEVICE LAMP   | Status: %s | Mode: %s | DB: Saved", req.Status, req.Mode)
 }
 
 func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) {
@@ -208,6 +223,7 @@ func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) 
 		Mode     string `json:"mode"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &req); err != nil { return }
+	
 	go h.curtainSvc.ProcessCurtain(req.Position, req.Mode)
 	
 	wsData := map[string]interface{}{
@@ -216,4 +232,6 @@ func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) 
 	}
 	jsonData, _ := json.Marshal(wsData)
 	h.wsHub.BroadcastData(jsonData)
+	
+	log.Printf("[INPUT]  DEVICE CURTAIN| Pos: %d%% | Mode: %s | DB: Saved", req.Position, req.Mode)
 }
