@@ -4,6 +4,7 @@ import (
 	"log"
 	"smarthome-backend/database/models"
 	"smarthome-backend/internal/repository"
+	"time"
 )
 
 type LampService interface {
@@ -22,8 +23,9 @@ func NewLampService(r repository.LampRepository) LampService {
 
 func (s *lampService) ProcessLamp(status, mode string) error {
 	lamp := &models.LampStatus{
-		Status: status,
-		Mode:   mode,
+		Status:    status,
+		Mode:      mode,
+		Timestamp: time.Now(),
 	}
 
 	err := s.repo.Create(lamp)
@@ -37,7 +39,18 @@ func (s *lampService) ProcessLamp(status, mode string) error {
 }
 
 func (s *lampService) GetLatest() (*models.LampStatus, error) {
-	return s.repo.GetLatest()
+	lamp, err := s.repo.GetLatest()
+	
+	// --- REVISI: Handling Data Kosong ---
+	if err != nil {
+		// Kembalikan Default: Mati & Auto
+		return &models.LampStatus{
+			Status: "off",
+			Mode:   "auto",
+		}, nil
+	}
+	
+	return lamp, nil
 }
 
 func (s *lampService) GetHistory(limit int) ([]models.LampStatus, error) {
