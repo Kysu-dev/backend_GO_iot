@@ -66,7 +66,7 @@ func (s *faceService) ProcessRecognition(req *models.FaceRecognitionRequest) err
 	// Broadcast via WebSocket
 	if s.wsHub != nil {
 		jsonData, _ := json.Marshal(event)
-		s.wsHub.Broadcast(jsonData)
+		s.wsHub.BroadcastData(jsonData)
 	}
 
 	return nil
@@ -95,7 +95,7 @@ func (s *faceService) ProcessAlert(req *models.FaceAlertRequest) error {
 
 	if s.wsHub != nil {
 		jsonData, _ := json.Marshal(event)
-		s.wsHub.Broadcast(jsonData)
+		s.wsHub.BroadcastData(jsonData)
 	}
 
 	log.Printf("[Face] 🚨 Alert: %s", req.AlertType)
