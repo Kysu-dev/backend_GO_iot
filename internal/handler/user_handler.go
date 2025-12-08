@@ -85,6 +85,48 @@ func (h *UserHandler) GetByID(c *gin.Context) {
 	c.JSON(200, gin.H{"success": true, "data": user})
 }
 
+func (h *UserHandler) GetPending(c *gin.Context) {
+	users, err := h.svc.GetPending()
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": "Failed to retrieve pending users"})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true, "data": users})
+}
+
+func (h *UserHandler) Approve(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": "Invalid user ID"})
+		return
+	}
+
+	err = h.svc.Approve(uint(id))
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true, "message": "User approved"})
+}
+
+func (h *UserHandler) Reject(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": "Invalid user ID"})
+		return
+	}
+
+	err = h.svc.Reject(uint(id))
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true, "message": "User rejected"})
+}
+
 func (h *UserHandler) Delete(c *gin.Context) {
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {

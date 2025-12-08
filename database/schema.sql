@@ -14,10 +14,14 @@ CREATE TABLE IF NOT EXISTS users (
     name VARCHAR(100) NOT NULL,
     email VARCHAR(150) NOT NULL UNIQUE,
     password VARCHAR(255) NOT NULL,
-    role ENUM('admin','member','guest') DEFAULT 'member',
+    role ENUM('admin','member') DEFAULT 'member',
+    status ENUM('pending','active','suspended') DEFAULT 'pending',
+    face_encoding_path TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_email (email),
-    INDEX idx_role (role)
+    INDEX idx_role (role),
+    INDEX idx_status (status)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
@@ -35,14 +39,19 @@ CREATE TABLE IF NOT EXISTS fingerprint_data (
     INDEX idx_user_id (user_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================================
--- TABLE: PIN_CODES (1 PIN untuk semua user)
--- ============================================================
+DROP TABLE IF EXISTS pin_codes;
+
 CREATE TABLE IF NOT EXISTS pin_codes (
-    pin_id INT AUTO_INCREMENT PRIMARY KEY,
-    pin_code VARCHAR(20) NOT NULL,
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    universal_pin VARCHAR(6) NOT NULL UNIQUE,
+    set_by INT NOT NULL,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    INDEX idx_pin_code (pin_code)
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_pin_set_by FOREIGN KEY (set_by)
+        REFERENCES users(user_id)
+        ON DELETE RESTRICT,
+    INDEX idx_created_at (created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- ============================================================
@@ -51,7 +60,7 @@ CREATE TABLE IF NOT EXISTS pin_codes (
 CREATE TABLE IF NOT EXISTS access_logs (
     access_id INT AUTO_INCREMENT PRIMARY KEY,
     user_id INT,
-    method ENUM('fingerprint','pin','remote','unknown') DEFAULT 'unknown',
+    method ENUM('face','pin','remote','unknown') DEFAULT 'unknown',
     status ENUM('success','failed') DEFAULT 'failed',
     image_path TEXT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -135,7 +144,7 @@ CREATE TABLE IF NOT EXISTS sensor_light (
 CREATE TABLE IF NOT EXISTS door_status (
     door_id INT AUTO_INCREMENT PRIMARY KEY,
     status ENUM('locked','unlocked') DEFAULT 'locked',
-    method ENUM('fingerprint','pin','remote','auto') DEFAULT 'remote',
+    method ENUM('face','pin','remote','auto') DEFAULT 'remote',
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_status (status),
     INDEX idx_timestamp (timestamp)
@@ -177,24 +186,18 @@ CREATE TABLE IF NOT EXISTS notifications (
     INDEX idx_timestamp (timestamp)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- ============================================================
--- INSERT SAMPLE DATA
--- ============================================================
 
--- Insert default admin user (password: admin123)
-INSERT INTO users (name, email, password, role) VALUES
-('Admin', 'admin@smarthome.local', '$2a$10$8K1p/a0dL3.2E7HVy2Z3KeY5I.KH9.nZ8sH1J5xZ6K1xL7Y9Z3KeY', 'admin')
+INSERT INTO users (name, email, password, role, status) VALUES
+('Admin', 'admin@smarthome.local', '$2a$10$8K1p/a0dL3.2E7HVy2Z3KeY5I.KH9.nZ8sH1J5xZ6K1xL7Y9Z3KeY', 'admin', 'active')
 ON DUPLICATE KEY UPDATE name=name;
 
--- Insert sample member user (password: user123)
-INSERT INTO users (name, email, password, role) VALUES
-('John Doe', 'john@example.com', '$2a$10$8K1p/a0dL3.2E7HVy2Z3KeY5I.KH9.nZ8sH1J5xZ6K1xL7Y9Z3KeY', 'member')
+INSERT INTO users (name, email, password, role, status) VALUES
+('John Doe', 'john@example.com', '$2a$10$8K1p/a0dL3.2E7HVy2Z3KeY5I.KH9.nZ8sH1J5xZ6K1xL7Y9Z3KeY', 'member', 'active')
 ON DUPLICATE KEY UPDATE name=name;
 
--- Insert default PIN code
-INSERT INTO pin_codes (pin_code) VALUES
-('123456')
-ON DUPLICATE KEY UPDATE pin_code=pin_code;
+INSERT INTO pin_codes (universal_pin, set_by) VALUES
+('123456', 1)
+ON DUPLICATE KEY UPDATE universal_pin=universal_pin;
 
 -- Insert initial notifications
 INSERT INTO notifications (title, message, type) VALUES

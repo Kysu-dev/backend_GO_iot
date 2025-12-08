@@ -22,6 +22,8 @@ type AppConfig struct {
 	// User & Auth Handlers
 	UserHandler      *handler.UserHandler
 	AccessLogHandler *handler.AccessLogHandler
+	AuthHandler      *handler.AuthHandler
+	AdminHandler     *handler.AdminHandler
 
 	// Notification Handler
 	NotificationHandler *handler.NotificationHandler
@@ -120,11 +122,27 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 		// ==================== USER ENDPOINTS ====================
 		user := api.Group("/user")
 		{
-			user.POST("/register", cfg.UserHandler.Register)
-			user.POST("/login", cfg.UserHandler.Login)
 			user.GET("/", cfg.UserHandler.GetAll)
 			user.GET("/:id", cfg.UserHandler.GetByID)
 			user.DELETE("/:id", cfg.UserHandler.Delete)
+		}
+
+		// ==================== AUTH ENDPOINTS ====================
+		auth := api.Group("/auth")
+		{
+			auth.POST("/register", cfg.AuthHandler.Register)
+			auth.POST("/login", cfg.AuthHandler.Login)
+		}
+
+		// ==================== ADMIN ENDPOINTS ====================
+		admin := api.Group("/admin")
+		{
+			admin.GET("/users/pending", cfg.AdminHandler.GetPendingUsers)
+			admin.POST("/users/:id/approve", cfg.UserHandler.Approve)
+			admin.POST("/users/:id/reject", cfg.UserHandler.Reject)
+
+			admin.GET("/pin", cfg.AdminHandler.GetUniversalPin)
+			admin.POST("/pin", cfg.AdminHandler.SetUniversalPin)
 		}
 
 		// ==================== ACCESS LOG ENDPOINTS ====================

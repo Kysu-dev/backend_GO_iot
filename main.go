@@ -43,6 +43,7 @@ func main() {
 	userRepo := repository.NewUserRepository(db)
 	accessLogRepo := repository.NewAccessLogRepository(db)
 	notifRepo := repository.NewNotificationRepository(db)
+	pinRepo := repository.NewPinRepository(db)
 
 	// 4. Init Services
 	gasSvc := service.NewGasService(gasRepo)
@@ -55,6 +56,8 @@ func main() {
 	userSvc := service.NewUserService(userRepo)
 	accessLogSvc := service.NewAccessLogService(accessLogRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
+	pinSvc := service.NewPinService(pinRepo)
+	authSvc := service.NewAuthService("http://localhost:5000", "jwt-secret-key")
 
 	// =========================================================================
 	// 5. SETUP MQTT CLIENT (PINDAHKAN KE ATAS SINI AGAR BISA DIPAKAI HANDLER)
@@ -70,7 +73,7 @@ func main() {
 	opts.SetAutoReconnect(true)
 
 	// Buat object client (TAPI BELUM CONNECT)
-	mqttClient := mqttLib.NewClient(opts) 
+	mqttClient := mqttLib.NewClient(opts)
 
 	// 6. Init MQTT Handler (SEKARANG KITA BISA MASUKKAN mqttClient)
 	mqttH := mqtt.NewMQTTHandler(
@@ -101,8 +104,7 @@ func main() {
 		log.Fatal("❌ MQTT Connection Failed:", token.Error())
 	}
 	// Panggil manual agar langsung subscribe saat start
-	mqttH.SetupRoutes(mqttClient) 
-
+	mqttH.SetupRoutes(mqttClient)
 
 	// 8. Init Handlers (HTTP)
 	gasHandler := handler.NewGasHandler(gasSvc)
@@ -115,12 +117,11 @@ func main() {
 	userHandler := handler.NewUserHandler(userSvc)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogSvc)
 	notifHandler := handler.NewNotificationHandler(notifSvc)
-	
-	// deviceControlHandler butuh mqttClient juga
-	deviceControlHandler := handler.NewDeviceControlHandler(mqttClient)
-	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient)
+	authHandler := handler.NewAuthHandler(userSvc, authSvc)
+	adminHandler := handler.NewAdminHandler(pinSvc, userSvc)
 
-	// 9. Router Configuration
+	deviceControlHandler := handler.NewDeviceControlHandler(mqttClient)
+	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient) // 9. Router Configuration
 	routerCfg := router.AppConfig{
 		GasHandler:           gasHandler,
 		TempHandler:          tempHandler,
@@ -132,6 +133,8 @@ func main() {
 		UserHandler:          userHandler,
 		AccessLogHandler:     accessLogHandler,
 		NotificationHandler:  notifHandler,
+		AuthHandler:          authHandler,
+		AdminHandler:         adminHandler,
 		DeviceControlHandler: deviceControlHandler,
 		FaceHandler:          faceHandler,
 		WsHub:                wsHub,

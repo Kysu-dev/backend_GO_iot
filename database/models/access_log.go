@@ -6,7 +6,7 @@ import "time"
 type AccessLog struct {
 	AccessID  uint      `gorm:"primaryKey;column:access_id" json:"access_id"`
 	UserID    *uint     `gorm:"index" json:"user_id,omitempty"`
-	Method    string    `gorm:"type:enum('fingerprint','pin','remote','unknown')" json:"method"`
+	Method    string    `gorm:"type:enum('face','pin','remote','unknown')" json:"method"`
 	Status    string    `gorm:"type:enum('success','failed')" json:"status"`
 	ImagePath string    `gorm:"type:text" json:"image_path,omitempty"`
 	Timestamp time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"timestamp"`

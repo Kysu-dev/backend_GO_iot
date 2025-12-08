@@ -2,7 +2,6 @@ package service
 
 import (
 	"errors"
-	"log"
 	"smarthome-backend/database/models"
 	"smarthome-backend/internal/repository"
 
@@ -14,6 +13,9 @@ type UserService interface {
 	Login(req models.LoginRequest) (*models.User, error)
 	GetByID(id uint) (*models.User, error)
 	GetAll() ([]models.User, error)
+	GetPending() ([]models.User, error)
+	Approve(id uint) error
+	Reject(id uint) error
 	Update(user *models.User) error
 	Delete(id uint) error
 }
@@ -50,15 +52,14 @@ func (s *userService) Register(req models.UserRequest) (*models.User, error) {
 		Email:    req.Email,
 		Password: string(hashedPassword),
 		Role:     role,
+		Status:   "pending",
 	}
 
 	err = s.repo.Create(user)
 	if err != nil {
-		log.Printf("❌ Error creating user: %v", err)
 		return nil, err
 	}
 
-	log.Printf("✅ User registered: %s (%s)", user.Email, user.Role)
 	return user, nil
 }
 
@@ -68,13 +69,15 @@ func (s *userService) Login(req models.LoginRequest) (*models.User, error) {
 		return nil, errors.New("invalid email or password")
 	}
 
-	// Verify password
+	if user.Status != "active" {
+		return nil, errors.New("account not active")
+	}
+
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
 	if err != nil {
 		return nil, errors.New("invalid email or password")
 	}
 
-	log.Printf("✅ User logged in: %s", user.Email)
 	return user, nil
 }
 
@@ -91,5 +94,34 @@ func (s *userService) Update(user *models.User) error {
 }
 
 func (s *userService) Delete(id uint) error {
+	return s.repo.Delete(id)
+}
+
+func (s *userService) GetPending() ([]models.User, error) {
+	allUsers, err := s.repo.GetAll()
+	if err != nil {
+		return nil, err
+	}
+
+	pending := []models.User{}
+	for _, user := range allUsers {
+		if user.Status == "pending" {
+			pending = append(pending, user)
+		}
+	}
+	return pending, nil
+}
+
+func (s *userService) Approve(id uint) error {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
+	}
+
+	user.Status = "active"
+	return s.repo.Update(user)
+}
+
+func (s *userService) Reject(id uint) error {
 	return s.repo.Delete(id)
 }

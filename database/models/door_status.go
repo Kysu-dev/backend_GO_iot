@@ -6,7 +6,7 @@ import "time"
 type DoorStatus struct {
 	DoorID    uint      `gorm:"primaryKey;column:door_id" json:"door_id"`
 	Status    string    `gorm:"type:enum('locked','unlocked')" json:"status"`
-	Method    string    `gorm:"type:enum('fingerprint','pin','remote','auto')" json:"method"`
+	Method    string    `gorm:"type:enum('face','pin','remote','auto')" json:"method"`
 	Timestamp time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"timestamp"`
 }
 
