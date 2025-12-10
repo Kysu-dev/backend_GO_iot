@@ -32,30 +32,55 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	}
 
 	// STEP 1: Validate face SEBELUM create user
+	println("[AUTH] Validating face with Python service...")
 	valid, err := h.authSvc.ValidateFaceWithPython(req.FaceImage)
-	if err != nil || !valid {
+	if err != nil {
+		println("[AUTH] Face validation ERROR:", err.Error())
 		c.JSON(400, gin.H{"success": false, "error": "Face validation failed: " + err.Error()})
 		return
 	}
+	if !valid {
+		println("[AUTH] Face validation FAILED: invalid face")
+		c.JSON(400, gin.H{"success": false, "error": "Face validation failed: invalid face detected"})
+		return
+	}
+	println("[AUTH] Face validation SUCCESS")
 
 	// STEP 2: Create user (face sudah valid)
+	println("[AUTH] Creating user in database...")
 	user, err := h.userSvc.Register(req)
 	if err != nil {
+		println("[AUTH] User creation ERROR:", err.Error())
 		c.JSON(400, gin.H{"success": false, "error": err.Error()})
 		return
 	}
+	println("[AUTH] User created with ID:", user.UserID)
 
 	// STEP 3: Enroll face & dapat path pkl
+	println("[AUTH] Enrolling face to Python service...")
 	filename, err := h.authSvc.EnrollFaceWithPython(user.UserID, user.Name, req.FaceImage)
 	if err != nil {
+		println("[AUTH] Face enrollment ERROR:", err.Error())
+		println("[AUTH] Rolling back user creation...")
 		h.userSvc.Delete(user.UserID) // Rollback
 		c.JSON(500, gin.H{"success": false, "error": "Face enrollment failed: " + err.Error()})
 		return
 	}
+	println("[AUTH] Face enrolled successfully. File:", filename)
 
 	// STEP 4: Update user dengan face_encoding_path
+	println("[AUTH] Updating user with face_encoding_path...")
 	user.FaceEncodingPath = filename
-	h.userSvc.Update(user)
+	println("[AUTH] Setting FaceEncodingPath to:", filename)
+
+	err = h.userSvc.Update(user)
+	if err != nil {
+		println("[AUTH] Update ERROR:", err.Error())
+		c.JSON(500, gin.H{"success": false, "error": "Failed to update user with face path: " + err.Error()})
+		return
+	}
+	println("[AUTH] User updated successfully!")
+	println("[AUTH] Registration completed successfully!")
 
 	c.JSON(201, gin.H{
 		"success": true,
