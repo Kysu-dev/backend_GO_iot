@@ -57,7 +57,7 @@ func main() {
 	accessLogSvc := service.NewAccessLogService(accessLogRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
 	pinSvc := service.NewPinService(pinRepo)
-	authSvc := service.NewAuthService("http://localhost:5000", "jwt-secret-key")
+	authSvc := service.NewAuthService("http://localhost:5001", "jwt-secret-key")
 
 	// =========================================================================
 	// 5. SETUP MQTT CLIENT (PINDAHKAN KE ATAS SINI AGAR BISA DIPAKAI HANDLER)

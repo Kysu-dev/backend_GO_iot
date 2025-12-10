@@ -26,41 +26,36 @@ func (h *AuthHandler) Register(c *gin.Context) {
 		return
 	}
 
-	// Validate face image is required
 	if req.FaceImage == "" {
 		c.JSON(400, gin.H{"success": false, "error": "Face image is required"})
 		return
 	}
 
-	// Validate face via Python service
+	// STEP 1: Validate face SEBELUM create user
 	valid, err := h.authSvc.ValidateFaceWithPython(req.FaceImage)
 	if err != nil || !valid {
-		c.JSON(400, gin.H{"success": false, "error": "Face validation failed: No face detected or invalid image"})
+		c.JSON(400, gin.H{"success": false, "error": "Face validation failed: " + err.Error()})
 		return
 	}
 
-	// Create user in database
+	// STEP 2: Create user (face sudah valid)
 	user, err := h.userSvc.Register(req)
 	if err != nil {
 		c.JSON(400, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	// Enroll face to Python service
+	// STEP 3: Enroll face & dapat path pkl
 	filename, err := h.authSvc.EnrollFaceWithPython(user.UserID, user.Name, req.FaceImage)
 	if err != nil {
-		// Rollback: Delete user if face enrollment fails
-		h.userSvc.Delete(user.UserID)
+		h.userSvc.Delete(user.UserID) // Rollback
 		c.JSON(500, gin.H{"success": false, "error": "Face enrollment failed: " + err.Error()})
 		return
 	}
 
-	// Update user with face_encoding_path
+	// STEP 4: Update user dengan face_encoding_path
 	user.FaceEncodingPath = filename
-	if err := h.userSvc.Update(user); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": "Failed to save face encoding path"})
-		return
-	}
+	h.userSvc.Update(user)
 
 	c.JSON(201, gin.H{
 		"success": true,
