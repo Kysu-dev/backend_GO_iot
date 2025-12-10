@@ -70,15 +70,15 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	// STEP 4: Update user dengan face_encoding_path
 	println("[AUTH] Updating user with face_encoding_path...")
-	user.FaceEncodingPath = filename
 	println("[AUTH] Setting FaceEncodingPath to:", filename)
 
-	err = h.userSvc.Update(user)
+	err = h.userSvc.UpdateFacePath(user.UserID, filename)
 	if err != nil {
 		println("[AUTH] Update ERROR:", err.Error())
 		c.JSON(500, gin.H{"success": false, "error": "Failed to update user with face path: " + err.Error()})
 		return
 	}
+	user.FaceEncodingPath = filename // Update local object untuk response
 	println("[AUTH] User updated successfully!")
 	println("[AUTH] Registration completed successfully!")
 

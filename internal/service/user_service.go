@@ -17,6 +17,7 @@ type UserService interface {
 	Approve(id uint) error
 	Reject(id uint) error
 	Update(user *models.User) error
+	UpdateFacePath(userID uint, facePath string) error
 	Delete(id uint) error
 }
 
@@ -91,6 +92,10 @@ func (s *userService) GetAll() ([]models.User, error) {
 
 func (s *userService) Update(user *models.User) error {
 	return s.repo.Update(user)
+}
+
+func (s *userService) UpdateFacePath(userID uint, facePath string) error {
+	return s.repo.UpdateFacePath(userID, facePath)
 }
 
 func (s *userService) Delete(id uint) error {

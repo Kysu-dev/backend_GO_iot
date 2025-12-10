@@ -12,6 +12,7 @@ type UserRepository interface {
 	FindByID(id uint) (*models.User, error)
 	GetAll() ([]models.User, error)
 	Update(user *models.User) error
+	UpdateFacePath(userID uint, facePath string) error
 	Delete(id uint) error
 }
 
@@ -46,7 +47,12 @@ func (r *userRepository) GetAll() ([]models.User, error) {
 }
 
 func (r *userRepository) Update(user *models.User) error {
-	return r.db.Save(user).Error
+	// Use Updates() to update only non-zero fields, avoiding datetime issues
+	return r.db.Model(user).Updates(user).Error
+}
+
+func (r *userRepository) UpdateFacePath(userID uint, facePath string) error {
+	return r.db.Model(&models.User{}).Where("user_id = ?", userID).Update("face_encoding_path", facePath).Error
 }
 
 func (r *userRepository) Delete(id uint) error {
