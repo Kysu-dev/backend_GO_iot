@@ -143,10 +143,10 @@ func main() {
 
 	// 10. Run Server
 	log.Println("\n╔════════════════════════════════════════╗")
-	log.Printf("║  🚀 Server running on port %s        ║\n", cfg.ServerPort)
+	log.Printf(" ║  🚀 Server running on port %s             ║\n", cfg.ServerPort)
 	log.Println("║  📱 API: http://localhost:" + cfg.ServerPort + "      ║")
-	log.Println("║  📡 MQTT: " + cfg.MQTTBroker + "     ║")
-	log.Println("╚════════════════════════════════════════╝\n")
+	log.Println("║  📡 MQTT: " + cfg.MQTTBroker + "       ║")
+	log.Println("╚════════════════════════════════════════╝")
 
 	r.Run(":" + cfg.ServerPort)
 }
