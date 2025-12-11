@@ -41,7 +41,7 @@ type AppConfig struct {
 func InitRouter(cfg AppConfig) *gin.Engine {
 	r := gin.Default()
 
-	// CORS Middleware (if needed)
+	// CORS Middleware
 	r.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -102,9 +102,9 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			device.GET("/lamp/history", cfg.LampHandler.GetAll)
 
 			// Curtain Status
+			// NOTE: History dihapus karena menggunakan logika Single Row Update
 			device.POST("/curtain", cfg.CurtainHandler.Create)
 			device.GET("/curtain/latest", cfg.CurtainHandler.GetLatest)
-			device.GET("/curtain/history", cfg.CurtainHandler.GetAll)
 		}
 
 		// ==================== DEVICE CONTROL ENDPOINTS ====================
@@ -117,11 +117,15 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			control.POST("/door", cfg.DeviceControlHandler.ControlDoor)
 			control.POST("/lamp", cfg.DeviceControlHandler.ControlLamp)
 			control.POST("/curtain", cfg.DeviceControlHandler.ControlCurtain)
+			
+			// Manual Buzzer Control
+			control.POST("/buzzer", cfg.DeviceControlHandler.ControlBuzzer)
 		}
 
 		// ==================== USER ENDPOINTS ====================
 		user := api.Group("/user")
 		{
+			// Register & Login dipisah ke group /auth di bawah
 			user.GET("/", cfg.UserHandler.GetAll)
 			user.GET("/:id", cfg.UserHandler.GetByID)
 			user.DELETE("/:id", cfg.UserHandler.Delete)
@@ -137,14 +141,15 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 		// ==================== ADMIN ENDPOINTS ====================
 		admin := api.Group("/admin")
 		{
+			// User Approval
 			admin.GET("/users/pending", cfg.AdminHandler.GetPendingUsers)
-			admin.POST("/users/:id/approve", cfg.UserHandler.Approve)
-			admin.POST("/users/:id/reject", cfg.UserHandler.Reject)
+			admin.POST("/users/:id/approve", cfg.AdminHandler.Approve)  // ⭐ Ubah ke AdminHandler
+			admin.POST("/users/:id/reject", cfg.AdminHandler.Reject)    // ⭐ Ubah ke AdminHandler
 
+			// Universal PIN Management
 			admin.GET("/pin", cfg.AdminHandler.GetUniversalPin)
 			admin.POST("/pin", cfg.AdminHandler.SetUniversalPin)
 		}
-
 		// ==================== ACCESS LOG ENDPOINTS ====================
 		accessLog := api.Group("/access-log")
 		{

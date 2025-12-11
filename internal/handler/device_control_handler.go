@@ -4,189 +4,181 @@ import (
 	"encoding/json"
 	"log"
 	
-	// Pastikan model DeviceControl sudah ada di file models Anda
-	"smarthome-backend/database/models"
+	"smarthome-backend/internal/service"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gin-gonic/gin"
 )
 
 type DeviceControlHandler struct {
-	mqttClient mqtt.Client
+	mqttClient  mqtt.Client
+	lampSvc     service.LampService
+	doorSvc     service.DoorService
+	curtainSvc  service.CurtainService
 }
 
-func NewDeviceControlHandler(client mqtt.Client) *DeviceControlHandler {
-	return &DeviceControlHandler{mqttClient: client}
+// Constructor sesuai dengan main.go (4 Parameter)
+func NewDeviceControlHandler(
+	client mqtt.Client, 
+	lampSvc service.LampService,
+	doorSvc service.DoorService,
+	curtainSvc service.CurtainService,
+) *DeviceControlHandler {
+	return &DeviceControlHandler{
+		mqttClient: client,
+		lampSvc:    lampSvc,
+		doorSvc:    doorSvc,
+		curtainSvc: curtainSvc,
+	}
 }
 
-// ==================== HELPER FUNCTION (Agar codingan rapi) ====================
+// Helper untuk Publish ke MQTT
 func (h *DeviceControlHandler) publishToMQTT(topic string, payload interface{}) error {
 	jsonPayload, err := json.Marshal(payload)
 	if err != nil {
 		return err
 	}
-	// Publish dengan QoS 1 agar lebih reliable
 	token := h.mqttClient.Publish(topic, 1, false, jsonPayload)
 	token.Wait()
 	return token.Error()
 }
 
-// ==================== ENDPOINTS ====================
-
-// 1. Control - Universal Endpoint (Optional)
+// --- UNIVERSAL CONTROL (Opsional, jika ingin satu endpoint untuk semua) ---
 func (h *DeviceControlHandler) Control(c *gin.Context) {
-	var req models.DeviceControl
+	var req struct {
+		Device string                 `json:"device" binding:"required"`
+		Action map[string]interface{} `json:"action" binding:"required"`
+	}
+
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	var topic string
-	switch req.Device {
-	case "door":
-		topic = "iotcihuy/home/door/control"
-	case "lamp":
-		topic = "iotcihuy/home/lamp/control"
-	case "curtain":
-		topic = "iotcihuy/home/curtain/control"
-	default:
-		c.JSON(400, gin.H{"success": false, "error": "Invalid device"})
+	// Contoh implementasi sederhana publish raw
+	topic := "iotcihuy/home/" + req.Device + "/control"
+	if err := h.publishToMQTT(topic, req.Action); err != nil {
+		c.JSON(500, gin.H{"error": "Failed to publish MQTT"})
 		return
 	}
 
-	payload := map[string]string{"action": req.Action}
-
-	if err := h.publishToMQTT(topic, payload); err != nil {
-		log.Printf("❌ MQTT Error: %v", err)
-		c.JSON(500, gin.H{"success": false, "error": "Failed to control device"})
-		return
-	}
-
-	log.Printf("✅ Device control sent: %s -> %s", req.Device, req.Action)
-	c.JSON(200, gin.H{"success": true, "message": "Command sent"})
+	c.JSON(200, gin.H{"message": "Command sent", "device": req.Device})
 }
 
-// 2. Control Door (Pintu)
+// 1. CONTROL DOOR (Lock/Unlock)
 func (h *DeviceControlHandler) ControlDoor(c *gin.Context) {
 	var req struct {
 		Action string `json:"action" binding:"required,oneof=lock unlock"`
 		Method string `json:"method"`
 	}
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-
 	if req.Method == "" { req.Method = "remote" }
 
-	payload := map[string]string{
-		"action": req.Action,
-		"method": req.Method,
-	}
-	
-	// FIX TOPIC
-	topic := "iotcihuy/home/door/control"
-
-	if err := h.publishToMQTT(topic, payload); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": "Failed to control door"})
+	// A. Kirim ke MQTT (Agar Alat Bergerak)
+	payload := map[string]string{"action": req.Action, "method": req.Method}
+	if err := h.publishToMQTT("iotcihuy/home/door/control", payload); err != nil {
+		log.Printf("❌ MQTT Error: %v", err)
+		c.JSON(500, gin.H{"error": "Failed MQTT"})
 		return
 	}
 
-	log.Printf("🚪 Door control: %s", req.Action)
-	c.JSON(200, gin.H{"success": true, "message": "Door " + req.Action + "ed"})
+	// B. SIMPAN KE DB LANGSUNG (Optimistic Update)
+	status := "locked"
+	if req.Action == "unlock" { status = "unlocked" }
+	
+	h.doorSvc.ProcessDoor(status, req.Method)
+
+	c.JSON(200, gin.H{"success": true, "message": "Door Command Sent & Saved"})
 }
 
-// 3. Control Lamp (Lampu)
+// 2. CONTROL LAMP (On/Off + Auto/Manual)
 func (h *DeviceControlHandler) ControlLamp(c *gin.Context) {
 	var req struct {
 		Action string `json:"action" binding:"required,oneof=on off"`
 		Mode   string `json:"mode"`
 	}
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 	if req.Mode == "" { req.Mode = "manual" }
 
-	payload := map[string]string{
-		"action": req.Action,
-		"mode":   req.Mode,
-	}
-	
-	// FIX TOPIC
-	topic := "iotcihuy/home/lamp/control"
-
-	if err := h.publishToMQTT(topic, payload); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": "Failed to control lamp"})
+	// A. Kirim ke MQTT
+	payload := map[string]string{"action": req.Action, "mode": req.Mode}
+	if err := h.publishToMQTT("iotcihuy/home/lamp/control", payload); err != nil {
+		log.Printf("❌ MQTT Error: %v", err)
+		c.JSON(500, gin.H{"error": "Failed MQTT"})
 		return
 	}
 
-	log.Printf("💡 Lamp control: %s (%s)", req.Action, req.Mode)
-	c.JSON(200, gin.H{"success": true, "message": "Lamp turned " + req.Action})
+	// B. SIMPAN KE DB LANGSUNG
+	h.lampSvc.ProcessLamp(req.Action, req.Mode)
+
+	c.JSON(200, gin.H{"success": true, "message": "Lamp Command Sent & Saved"})
 }
 
-// 4. Control Curtain (Gorden)
+// 3. CONTROL CURTAIN (Open/Close + Auto/Manual)
 func (h *DeviceControlHandler) ControlCurtain(c *gin.Context) {
 	var req struct {
-		Position int    `json:"position" binding:"required,min=0,max=100"`
-		Mode     string `json:"mode"`
-		Action   string `json:"action"` // open/close (optional helper)
+		Action string `json:"action" binding:"required,oneof=open close auto manual"`
+		Mode   string `json:"mode"`
 	}
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Mode == "" { req.Mode = "manual" }
 	
-	// Helper logic
-	if req.Action == "open" { req.Position = 180 }
-	if req.Action == "close" { req.Position = 0 }
+	// Logic Default Mode
+	if req.Mode == "" {
+		if req.Action == "auto" { req.Mode = "auto" } else { req.Mode = "manual" }
+	}
 
+	// Logic Action -> Status untuk DB
+	status := "closed"
+	if req.Action == "open" { status = "open" }
+
+	// A. Kirim ke MQTT (ESP32 butuh action: open/close/auto/manual)
 	payload := map[string]interface{}{
-		"position": req.Position,
-		"mode":     req.Mode,
-		"action":   req.Action,
+		"action": req.Action, 
 	}
-	
-	// FIX TOPIC
-	topic := "iotcihuy/home/curtain/control"
-
-	if err := h.publishToMQTT(topic, payload); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": "Failed to control curtain"})
+	if err := h.publishToMQTT("iotcihuy/home/curtain/control", payload); err != nil {
+		log.Printf("❌ MQTT Error: %v", err)
+		c.JSON(500, gin.H{"error": "Failed MQTT"})
 		return
 	}
 
-	log.Printf("🪟 Curtain control: position %d%% (%s)", req.Position, req.Mode)
-	c.JSON(200, gin.H{"success": true, "message": "Curtain position set"})
+	// B. SIMPAN KE DB LANGSUNG
+	// Jika actionnya open/close, simpan statusnya
+	if req.Action == "open" || req.Action == "close" {
+		h.curtainSvc.ProcessCurtain(status, req.Mode)
+	} else {
+		// Jika actionnya ganti mode (auto/manual), update mode saja
+		// (Idealnya kita ambil status terakhir, tapi disini kita update mode)
+		// Kita kirim status "closed" sebagai default jika ganti mode, atau logic lain sesuai kebutuhan
+		h.curtainSvc.ProcessCurtain(status, req.Action) 
+	}
+
+	c.JSON(200, gin.H{"success": true, "message": "Curtain Command Sent & Saved"})
 }
 
-// 5. Control Buzzer (Manual Alert) - INI YANG BARU
+// 4. CONTROL BUZZER (Manual)
 func (h *DeviceControlHandler) ControlBuzzer(c *gin.Context) {
 	var req struct {
 		Action string `json:"action" binding:"required,oneof=on off"`
 	}
-
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
 
-	payload := map[string]string{
-		"action": req.Action,
-		"source": "manual_api",
-	}
-
-	// FIX TOPIC
-	topic := "iotcihuy/home/buzzer/control"
-
-	if err := h.publishToMQTT(topic, payload); err != nil {
-		c.JSON(500, gin.H{"success": false, "error": "Failed to control buzzer"})
+	payload := map[string]string{"action": req.Action}
+	if err := h.publishToMQTT("iotcihuy/home/buzzer/control", payload); err != nil {
+		c.JSON(500, gin.H{"error": "Failed MQTT"})
 		return
 	}
 
-	log.Printf("🚨 Buzzer Manual Control: %s", req.Action)
-	c.JSON(200, gin.H{"success": true, "message": "Buzzer turned " + req.Action})
+	c.JSON(200, gin.H{"success": true, "message": "Buzzer Command Sent"})
 }

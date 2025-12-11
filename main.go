@@ -29,7 +29,6 @@ func main() {
 	// 2. Init WebSocket
 	wsHub := websocket.NewHub()
 	go wsHub.Run()
-	// go wsHub.StartPingTimer() // Aktifkan jika sudah implementasi ping
 	log.Println("✅ WebSocket Hub Running")
 
 	// 3. Init Repositories
@@ -57,27 +56,49 @@ func main() {
 	accessLogSvc := service.NewAccessLogService(accessLogRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
 	pinSvc := service.NewPinService(pinRepo)
-	authSvc := service.NewAuthService("http://localhost:5001", "jwt-secret-key")
+	
+	// Sesuaikan IP ini dengan IP Laptop yang menjalankan Python Face Rec
+	authSvc := service.NewAuthService("http://10.124.88.112:5001", "jwt-secret-key")
 
 	// =========================================================================
-	// 5. SETUP MQTT CLIENT (PINDAHKAN KE ATAS SINI AGAR BISA DIPAKAI HANDLER)
+	// 5. SETUP MQTT CLIENT (OPTIMALISASI HIVEMQ)
 	// =========================================================================
 	opts := mqttLib.NewClientOptions()
-	opts.AddBroker(cfg.MQTTBroker)
-	opts.SetClientID(cfg.MQTTClientID)
-	// Jika config kosong, fallback ke random ID
-	if cfg.MQTTClientID == "" {
-		opts.SetClientID("backend_srv_" + fmt.Sprintf("%d", time.Now().Unix()))
-	}
+	opts.AddBroker(cfg.MQTTBroker) // Pastikan config isinya: tcp://broker.hivemq.com:1883
+	
+	// --- A. ID UNIK (PENTING) ---
+	// Menggunakan Nano Second agar ID selalu beda tiap kali run.
+	// Ini mencegah error "Connection Lost" karena rebutan ID.
+	randomID := fmt.Sprintf("backend_felix_%d", time.Now().UnixNano())
+	opts.SetClientID(randomID)
+	log.Printf("🆔 MQTT Client ID: %s", randomID)
+
 	opts.SetCleanSession(true)
 	opts.SetAutoReconnect(true)
 
-	// Buat object client (TAPI BELUM CONNECT)
+	// --- B. SETTINGAN ANTI-PUTUS (PENTING UNTUK HIVEMQ) ---
+	// HiveMQ publik kadang lambat responnya. Kita perpanjang waktu tunggunya.
+	opts.SetKeepAlive(60 * time.Second)    // Kirim sinyal "Saya Hidup" tiap 60 detik
+	opts.SetPingTimeout(10 * time.Second)  // Tunggu balasan server 10 detik (Default cuma 2s)
+	opts.SetWriteTimeout(10 * time.Second) // Tunggu proses kirim data 10 detik
+	// ------------------------------------------------------
+	
+	opts.OnConnectionLost = func(c mqttLib.Client, err error) {
+		log.Printf("⚠️ MQTT Connection Lost: %v", err)
+	}
+	opts.OnConnect = func(c mqttLib.Client) {
+		log.Println("✅ Connected/Reconnected to MQTT Broker (HiveMQ)")
+	}
+
 	mqttClient := mqttLib.NewClient(opts)
 
-	// 6. Init MQTT Handler (SEKARANG KITA BISA MASUKKAN mqttClient)
+	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
+		log.Fatal("❌ MQTT Connection Failed:", token.Error())
+	}
+
+	// 6. Init MQTT Handler
 	mqttH := mqtt.NewMQTTHandler(
-		mqttClient, // <--- PARAMETER INI YANG TADI KURANG!
+		mqttClient,
 		gasSvc,
 		tempSvc,
 		humidSvc,
@@ -88,22 +109,7 @@ func main() {
 		wsHub,
 	)
 
-	// 7. Setup Callback & Connect
-	// Kita set OnConnect handler setelah mqttH jadi, supaya bisa panggil SetupRoutes
-	opts.OnConnect = func(c mqttLib.Client) {
-		log.Println("✅ Connected to MQTT Broker")
-		mqttH.SetupRoutes(c)
-	}
-	opts.OnConnectionLost = func(c mqttLib.Client, err error) {
-		log.Printf("⚠️ MQTT Connection Lost: %v", err)
-	}
-
-	// Karena kita mengubah opts setelah NewClient, kita perlu init ulang client
-	// ATAU cara paling gampang: Lakukan connect dan panggil SetupRoutes manual.
-	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatal("❌ MQTT Connection Failed:", token.Error())
-	}
-	// Panggil manual agar langsung subscribe saat start
+	// 7. Setup Routes (Subscribe Topik)
 	mqttH.SetupRoutes(mqttClient)
 
 	// 8. Init Handlers (HTTP)
@@ -120,8 +126,17 @@ func main() {
 	authHandler := handler.NewAuthHandler(userSvc, authSvc)
 	adminHandler := handler.NewAdminHandler(pinSvc, userSvc)
 
-	deviceControlHandler := handler.NewDeviceControlHandler(mqttClient)
-	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient) // 9. Router Configuration
+	// --- Device Handler (Lengkap 4 Parameter) ---
+	deviceControlHandler := handler.NewDeviceControlHandler(
+		mqttClient,
+		lampSvc,    
+		doorSvc,    
+		curtainSvc, 
+	)
+
+	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient)
+
+	// 9. Router Configuration
 	routerCfg := router.AppConfig{
 		GasHandler:           gasHandler,
 		TempHandler:          tempHandler,
@@ -143,7 +158,7 @@ func main() {
 
 	// 10. Run Server
 	log.Println("\n╔════════════════════════════════════════╗")
-	log.Printf(" ║  🚀 Server running on port %s             ║\n", cfg.ServerPort)
+	log.Printf("║  🚀 Server running on port %s            ║\n", cfg.ServerPort)
 	log.Println("║  📱 API: http://localhost:" + cfg.ServerPort + "      ║")
 	log.Println("║  📡 MQTT: " + cfg.MQTTBroker + "       ║")
 	log.Println("╚════════════════════════════════════════╝")

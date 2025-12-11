@@ -4,12 +4,12 @@ import (
 	"log"
 	"smarthome-backend/database/models"
 	"smarthome-backend/internal/repository"
+	"time"
 )
 
 type CurtainService interface {
-	ProcessCurtain(position int, mode string) error
+	ProcessCurtain(status string, mode string) error
 	GetLatest() (*models.CurtainStatus, error)
-	GetHistory(limit int) ([]models.CurtainStatus, error)
 }
 
 type curtainService struct {
@@ -20,26 +20,26 @@ func NewCurtainService(r repository.CurtainRepository) CurtainService {
 	return &curtainService{repo: r}
 }
 
-func (s *curtainService) ProcessCurtain(position int, mode string) error {
+func (s *curtainService) ProcessCurtain(status string, mode string) error {
+	if mode == "" { mode = "manual" }
+
 	curtain := &models.CurtainStatus{
-		Position: position,
-		Mode:     mode,
+		Status:    status, // "open" atau "closed"
+		Mode:      mode,
+		Timestamp: time.Now(),
 	}
 
-	err := s.repo.Create(curtain)
+	// Panggil Repo SaveStatus (Logika Upsert)
+	err := s.repo.SaveStatus(curtain)
 	if err != nil {
-		log.Printf("❌ Error saving curtain status: %v", err)
+		log.Printf("❌ Error updating curtain status: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Curtain status saved: position %d%% (%s)", position, mode)
+	log.Printf("✅ Curtain updated: %s (Mode: %s)", status, mode)
 	return nil
 }
 
 func (s *curtainService) GetLatest() (*models.CurtainStatus, error) {
 	return s.repo.GetLatest()
-}
-
-func (s *curtainService) GetHistory(limit int) ([]models.CurtainStatus, error) {
-	return s.repo.GetHistory(limit)
 }
