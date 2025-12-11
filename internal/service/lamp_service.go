@@ -28,19 +28,32 @@ func (s *lampService) ProcessLamp(status, mode string) error {
 		Timestamp: time.Now(),
 	}
 
-	err := s.repo.Create(lamp)
-	if err != nil {
-		log.Printf("❌ Error saving lamp status: %v", err)
-		return err
+	// Cek apakah sudah ada data
+	existing, err := s.repo.GetLatest()
+	if err != nil || existing.LampID == 0 {
+		// Belum ada data, INSERT
+		err = s.repo.Create(lamp)
+		if err != nil {
+			log.Printf("❌ Error creating lamp status: %v", err)
+			return err
+		}
+		log.Printf("✅ Lamp status created: %s (%s)", status, mode)
+	} else {
+		// Sudah ada data, UPDATE
+		err = s.repo.Update(lamp)
+		if err != nil {
+			log.Printf("❌ Error updating lamp status: %v", err)
+			return err
+		}
+		log.Printf("✅ Lamp status updated: %s (%s)", status, mode)
 	}
 
-	log.Printf("✅ Lamp status saved: %s (%s)", status, mode)
 	return nil
 }
 
 func (s *lampService) GetLatest() (*models.LampStatus, error) {
 	lamp, err := s.repo.GetLatest()
-	
+
 	// --- REVISI: Handling Data Kosong ---
 	if err != nil {
 		// Kembalikan Default: Mati & Auto
@@ -49,7 +62,7 @@ func (s *lampService) GetLatest() (*models.LampStatus, error) {
 			Mode:   "auto",
 		}, nil
 	}
-	
+
 	return lamp, nil
 }
 

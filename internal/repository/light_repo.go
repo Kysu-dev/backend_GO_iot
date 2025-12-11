@@ -8,6 +8,7 @@ import (
 
 type LightRepository interface {
 	Save(data *models.SensorLight) error
+	GetLatest() (*models.SensorLight, error)
 	GetAll(limit int) ([]models.SensorLight, error)
 }
 
@@ -23,6 +24,17 @@ func NewLightRepository(db *gorm.DB) LightRepository {
 func (r *lightRepository) Save(data *models.SensorLight) error {
 	query := "INSERT INTO sensor_light (lux, timestamp) VALUES (?, ?)"
 	return r.db.Exec(query, data.Lux, data.Timestamp).Error
+}
+
+// Get latest data
+func (r *lightRepository) GetLatest() (*models.SensorLight, error) {
+	var result models.SensorLight
+	query := "SELECT * FROM sensor_light ORDER BY timestamp DESC LIMIT 1"
+	err := r.db.Raw(query).Scan(&result).Error
+	if result.LightID == 0 {
+		return nil, gorm.ErrRecordNotFound
+	}
+	return &result, err
 }
 
 // Select all data with limit
