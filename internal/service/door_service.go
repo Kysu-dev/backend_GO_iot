@@ -77,6 +77,10 @@ func (s *doorService) GetHistory(limit int) ([]models.DoorStatus, error) {
 
 // saveAccessLog - Save door access to history
 func (s *doorService) saveAccessLog(status, method string, userID *uint) {
+	// Avoid duplicate access logs for face recognition; handler already logs those
+	if method == "face" {
+		return
+	}
 	// Determine if access was successful (unlocked = success)
 	accessStatus := "failed"
 	if status == "unlocked" {
