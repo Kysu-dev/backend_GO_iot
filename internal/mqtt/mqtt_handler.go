@@ -20,6 +20,7 @@ type MQTTHandler struct {
 	doorSvc    service.DoorService
 	lampSvc    service.LampService
 	curtainSvc service.CurtainService
+	pinSvc     service.PinService
 	wsHub      *websocket.Hub
 
 	// Buzzer state tracking
@@ -46,6 +47,7 @@ func NewMQTTHandler(
 	d service.DoorService,
 	lamp service.LampService,
 	curtain service.CurtainService,
+	pin service.PinService,
 	hub *websocket.Hub,
 ) *MQTTHandler {
 	return &MQTTHandler{
@@ -57,6 +59,7 @@ func NewMQTTHandler(
 		doorSvc:            d,
 		lampSvc:            lamp,
 		curtainSvc:         curtain,
+		pinSvc:             pin,
 		wsHub:              hub,
 		lastBuzzerState:    "off",
 		lastLampState:      "off",
@@ -74,6 +77,7 @@ func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
 		"iotcihuy/home/light":          h.handleLight,
 		"iotcihuy/home/lamp/status":    h.handleLampStatus,
 		"iotcihuy/home/door/status":    h.handleDoorStatus,
+		"iotcihuy/home/door/verify":    h.handlePinVerification,
 		"iotcihuy/home/curtain/status": h.handleCurtainStatus,
 		"iotcihuy/home/debug":          h.handleDebug,
 	}
@@ -491,4 +495,70 @@ func (h *MQTTHandler) handleDebug(client mqtt.Client, msg mqtt.Message) {
 	log.Printf("║  Free Heap        : %.0f bytes                      ║", data["free_heap"])
 	log.Printf("║  Uptime           : %.0fs                           ║", data["uptime_sec"])
 	log.Println("╚═════════════════════════════════════════════════════╝")
+}
+
+// ==================== PIN VERIFICATION HANDLER ====================
+
+// handlePinVerification - 
+func (h *MQTTHandler) handlePinVerification(client mqtt.Client, msg mqtt.Message) {
+	var req struct {
+		Pin string `json:"pin"`
+	}
+
+	if err := json.Unmarshal(msg.Payload(), &req); err != nil {
+		log.Printf("[ERROR] JSON Parse PIN Failed: %v | Payload: %s", err, string(msg.Payload()))
+		h.publishPinVerificationResponse(false, "Invalid format")
+		return
+	}
+
+	log.Printf("[VERIFY] 🔐 PIN Request: %s", req.Pin)
+
+	// Get universal PIN from database
+	pinData, err := h.pinSvc.GetUniversalPin()
+	if err != nil {
+		log.Printf("[ERROR] Failed to retrieve PIN from database: %v", err)
+		h.publishPinVerificationResponse(false, "Database error")
+		return
+	}
+
+	// Verify PIN
+	if req.Pin != pinData.UniversalPin {
+		log.Printf("[VERIFY] ❌ Invalid PIN attempt")
+		h.publishPinVerificationResponse(false, "Invalid PIN")
+		return
+	}
+
+	log.Printf("[VERIFY] ✅ Valid PIN: Sending unlock command")
+
+	// Send unlock command via MQTT
+	h.PublishDoorControl("unlock")
+
+	// Save access log to database (async)
+	go h.doorSvc.ProcessDoor("unlocked", "pin")
+
+	// Send success response to ESP32
+	h.publishPinVerificationResponse(true, "PIN verified, door unlocked")
+}
+
+// publishPinVerificationResponse - Send PIN verification result back to ESP32
+func (h *MQTTHandler) publishPinVerificationResponse(valid bool, message string) {
+	topic := "iotcihuy/home/door/verify/response"
+
+	payload := map[string]interface{}{
+		"valid":   valid,
+		"message": message,
+	}
+
+	jsonPayload, _ := json.Marshal(payload)
+
+	token := h.client.Publish(topic, 1, false, jsonPayload)
+	token.Wait()
+
+	if token.Error() == nil {
+		status := "✅"
+		if !valid {
+			status = "❌"
+		}
+		log.Printf("[RESPONSE] %s PIN → valid: %v", status, valid)
+	}
 }

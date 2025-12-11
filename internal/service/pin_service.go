@@ -23,5 +23,12 @@ func (s *pinService) GetUniversalPin() (*models.PinCode, error) {
 }
 
 func (s *pinService) SetUniversalPin(pin string, setBy uint) error {
-	return s.repo.SetUniversalPin(pin, setBy)
+	// Cek apakah sudah ada data
+	existing, err := s.repo.GetUniversalPin()
+	if err != nil || existing.ID == 0 {
+		// Belum ada data, CREATE
+		return s.repo.Create(pin, setBy)
+	}
+	// Sudah ada data, UPDATE
+	return s.repo.Update(pin, setBy)
 }

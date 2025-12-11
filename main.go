@@ -56,7 +56,7 @@ func main() {
 	accessLogSvc := service.NewAccessLogService(accessLogRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
 	pinSvc := service.NewPinService(pinRepo)
-	
+
 	// Sesuaikan IP ini dengan IP Laptop yang menjalankan Python Face Rec
 	authSvc := service.NewAuthService("http://10.124.88.112:5001", "jwt-secret-key")
 
@@ -65,7 +65,7 @@ func main() {
 	// =========================================================================
 	opts := mqttLib.NewClientOptions()
 	opts.AddBroker(cfg.MQTTBroker) // Pastikan config isinya: tcp://broker.hivemq.com:1883
-	
+
 	// --- A. ID UNIK (PENTING) ---
 	// Menggunakan Nano Second agar ID selalu beda tiap kali run.
 	// Ini mencegah error "Connection Lost" karena rebutan ID.
@@ -82,7 +82,7 @@ func main() {
 	opts.SetPingTimeout(10 * time.Second)  // Tunggu balasan server 10 detik (Default cuma 2s)
 	opts.SetWriteTimeout(10 * time.Second) // Tunggu proses kirim data 10 detik
 	// ------------------------------------------------------
-	
+
 	opts.OnConnectionLost = func(c mqttLib.Client, err error) {
 		log.Printf("⚠️ MQTT Connection Lost: %v", err)
 	}
@@ -106,6 +106,7 @@ func main() {
 		doorSvc,
 		lampSvc,
 		curtainSvc,
+		pinSvc,
 		wsHub,
 	)
 
@@ -117,7 +118,7 @@ func main() {
 	tempHandler := handler.NewTempHandler(tempSvc)
 	humidHandler := handler.NewHumidHandler(humidSvc)
 	lightHandler := handler.NewLightHandler(lightSvc)
-	doorHandler := handler.NewDoorHandler(doorSvc)
+	doorHandler := handler.NewDoorHandler(doorSvc, pinSvc, mqttClient)
 	lampHandler := handler.NewLampHandler(lampSvc)
 	curtainHandler := handler.NewCurtainHandler(curtainSvc)
 	userHandler := handler.NewUserHandler(userSvc)
@@ -129,9 +130,9 @@ func main() {
 	// --- Device Handler (Lengkap 4 Parameter) ---
 	deviceControlHandler := handler.NewDeviceControlHandler(
 		mqttClient,
-		lampSvc,    
-		doorSvc,    
-		curtainSvc, 
+		lampSvc,
+		doorSvc,
+		curtainSvc,
 	)
 
 	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient)

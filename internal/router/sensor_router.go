@@ -95,6 +95,7 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			device.POST("/door", cfg.DoorHandler.Create)
 			device.GET("/door/latest", cfg.DoorHandler.GetLatest)
 			device.GET("/door/history", cfg.DoorHandler.GetAll)
+			device.POST("/door/verify-pin", cfg.DoorHandler.VerifyPin)
 
 			// Lamp Status
 			device.POST("/lamp", cfg.LampHandler.Create)
@@ -117,7 +118,7 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			control.POST("/door", cfg.DeviceControlHandler.ControlDoor)
 			control.POST("/lamp", cfg.DeviceControlHandler.ControlLamp)
 			control.POST("/curtain", cfg.DeviceControlHandler.ControlCurtain)
-			
+
 			// Manual Buzzer Control
 			control.POST("/buzzer", cfg.DeviceControlHandler.ControlBuzzer)
 		}
@@ -143,8 +144,8 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 		{
 			// User Approval
 			admin.GET("/users/pending", cfg.AdminHandler.GetPendingUsers)
-			admin.POST("/users/:id/approve", cfg.AdminHandler.Approve)  // ⭐ Ubah ke AdminHandler
-			admin.POST("/users/:id/reject", cfg.AdminHandler.Reject)    // ⭐ Ubah ke AdminHandler
+			admin.POST("/users/:id/approve", cfg.AdminHandler.Approve) // ⭐ Ubah ke AdminHandler
+			admin.POST("/users/:id/reject", cfg.AdminHandler.Reject)   // ⭐ Ubah ke AdminHandler
 
 			// Universal PIN Management
 			admin.GET("/pin", cfg.AdminHandler.GetUniversalPin)
