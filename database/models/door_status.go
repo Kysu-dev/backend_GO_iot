@@ -6,7 +6,7 @@ import "time"
 type DoorStatus struct {
 	DoorID    uint      `gorm:"primaryKey;column:door_id" json:"door_id"`
 	Status    string    `gorm:"type:enum('locked','unlocked')" json:"status"`
-	Method    string    `gorm:"type:enum('face','pin','remote','auto')" json:"method"`
+	Method    string    `gorm:"type:enum('face','pin','remote')" json:"method"`
 	Timestamp time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"timestamp"`
 }
 
@@ -17,5 +17,6 @@ func (DoorStatus) TableName() string {
 // DoorRequest for controlling door lock
 type DoorRequest struct {
 	Status string `json:"status" binding:"required,oneof=locked unlocked"`
-	Method string `json:"method" binding:"required,oneof=fingerprint pin remote auto"`
+	Method string `json:"method" binding:"required,oneof=face pin remote"`
+	UserID *uint  `json:"user_id"` // Optional: untuk tracking user yang remote control
 }

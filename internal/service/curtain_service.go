@@ -21,22 +21,35 @@ func NewCurtainService(r repository.CurtainRepository) CurtainService {
 }
 
 func (s *curtainService) ProcessCurtain(status string, mode string) error {
-	if mode == "" { mode = "manual" }
+	if mode == "" {
+		mode = "manual"
+	}
 
 	curtain := &models.CurtainStatus{
-		Status:    status, // "open" atau "closed"
+		Status:    status,
 		Mode:      mode,
 		Timestamp: time.Now(),
 	}
 
-	// Panggil Repo SaveStatus (Logika Upsert)
-	err := s.repo.SaveStatus(curtain)
+	// Smart CREATE vs UPDATE
+	existing, err := s.repo.GetLatest()
 	if err != nil {
+		// No existing data, create new record
+		if err := s.repo.SaveStatus(curtain); err != nil {
+			log.Printf("❌ Error creating curtain status: %v", err)
+			return err
+		}
+		log.Printf("✅ Curtain created: %s (Mode: %s)", status, mode)
+		return nil
+	}
+
+	// Data exists, update it
+	if err := s.repo.Update(curtain); err != nil {
 		log.Printf("❌ Error updating curtain status: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Curtain updated: %s (Mode: %s)", status, mode)
+	log.Printf("✅ Curtain updated: %s (Mode: %s) [prev: %s (%s)]", status, mode, existing.Status, existing.Mode)
 	return nil
 }
 

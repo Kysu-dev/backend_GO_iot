@@ -49,7 +49,7 @@ func main() {
 	tempSvc := service.NewTempService(tempRepo)
 	humidSvc := service.NewHumidService(humidRepo)
 	lightSvc := service.NewLightService(lightRepo)
-	doorSvc := service.NewDoorService(doorRepo)
+	doorSvc := service.NewDoorService(doorRepo, accessLogRepo)
 	lampSvc := service.NewLampService(lampRepo)
 	curtainSvc := service.NewCurtainService(curtainRepo)
 	userSvc := service.NewUserService(userRepo)

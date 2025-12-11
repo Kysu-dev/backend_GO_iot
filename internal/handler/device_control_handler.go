@@ -3,7 +3,7 @@ package handler
 import (
 	"encoding/json"
 	"log"
-	
+
 	"smarthome-backend/internal/service"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -11,15 +11,15 @@ import (
 )
 
 type DeviceControlHandler struct {
-	mqttClient  mqtt.Client
-	lampSvc     service.LampService
-	doorSvc     service.DoorService
-	curtainSvc  service.CurtainService
+	mqttClient mqtt.Client
+	lampSvc    service.LampService
+	doorSvc    service.DoorService
+	curtainSvc service.CurtainService
 }
 
 // Constructor sesuai dengan main.go (4 Parameter)
 func NewDeviceControlHandler(
-	client mqtt.Client, 
+	client mqtt.Client,
 	lampSvc service.LampService,
 	doorSvc service.DoorService,
 	curtainSvc service.CurtainService,
@@ -75,7 +75,9 @@ func (h *DeviceControlHandler) ControlDoor(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Method == "" { req.Method = "remote" }
+	if req.Method == "" {
+		req.Method = "remote"
+	}
 
 	// A. Kirim ke MQTT (Agar Alat Bergerak)
 	payload := map[string]string{"action": req.Action, "method": req.Method}
@@ -87,9 +89,11 @@ func (h *DeviceControlHandler) ControlDoor(c *gin.Context) {
 
 	// B. SIMPAN KE DB LANGSUNG (Optimistic Update)
 	status := "locked"
-	if req.Action == "unlock" { status = "unlocked" }
-	
-	h.doorSvc.ProcessDoor(status, req.Method)
+	if req.Action == "unlock" {
+		status = "unlocked"
+	}
+
+	h.doorSvc.ProcessDoor(status, req.Method, nil)
 
 	c.JSON(200, gin.H{"success": true, "message": "Door Command Sent & Saved"})
 }
@@ -104,7 +108,9 @@ func (h *DeviceControlHandler) ControlLamp(c *gin.Context) {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	if req.Mode == "" { req.Mode = "manual" }
+	if req.Mode == "" {
+		req.Mode = "manual"
+	}
 
 	// A. Kirim ke MQTT
 	payload := map[string]string{"action": req.Action, "mode": req.Mode}
@@ -123,27 +129,19 @@ func (h *DeviceControlHandler) ControlLamp(c *gin.Context) {
 // 3. CONTROL CURTAIN (Open/Close + Auto/Manual)
 func (h *DeviceControlHandler) ControlCurtain(c *gin.Context) {
 	var req struct {
-		Action string `json:"action" binding:"required,oneof=open close auto manual"`
+		Action string `json:"action" binding:"required,oneof=open close"`
 		Mode   string `json:"mode"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"error": err.Error()})
 		return
 	}
-	
-	// Logic Default Mode
 	if req.Mode == "" {
-		if req.Action == "auto" { req.Mode = "auto" } else { req.Mode = "manual" }
+		req.Mode = "manual"
 	}
 
-	// Logic Action -> Status untuk DB
-	status := "closed"
-	if req.Action == "open" { status = "open" }
-
-	// A. Kirim ke MQTT (ESP32 butuh action: open/close/auto/manual)
-	payload := map[string]interface{}{
-		"action": req.Action, 
-	}
+	// A. Kirim ke MQTT
+	payload := map[string]string{"action": req.Action, "mode": req.Mode}
 	if err := h.publishToMQTT("iotcihuy/home/curtain/control", payload); err != nil {
 		log.Printf("❌ MQTT Error: %v", err)
 		c.JSON(500, gin.H{"error": "Failed MQTT"})
@@ -151,15 +149,11 @@ func (h *DeviceControlHandler) ControlCurtain(c *gin.Context) {
 	}
 
 	// B. SIMPAN KE DB LANGSUNG
-	// Jika actionnya open/close, simpan statusnya
-	if req.Action == "open" || req.Action == "close" {
-		h.curtainSvc.ProcessCurtain(status, req.Mode)
-	} else {
-		// Jika actionnya ganti mode (auto/manual), update mode saja
-		// (Idealnya kita ambil status terakhir, tapi disini kita update mode)
-		// Kita kirim status "closed" sebagai default jika ganti mode, atau logic lain sesuai kebutuhan
-		h.curtainSvc.ProcessCurtain(status, req.Action) 
+	status := "closed"
+	if req.Action == "open" {
+		status = "open"
 	}
+	h.curtainSvc.ProcessCurtain(status, req.Mode)
 
 	c.JSON(200, gin.H{"success": true, "message": "Curtain Command Sent & Saved"})
 }

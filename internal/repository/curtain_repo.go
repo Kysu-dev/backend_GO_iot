@@ -2,11 +2,13 @@ package repository
 
 import (
 	"smarthome-backend/database/models"
+
 	"gorm.io/gorm"
 )
 
 type CurtainRepository interface {
 	SaveStatus(curtain *models.CurtainStatus) error
+	Update(curtain *models.CurtainStatus) error
 	GetLatest() (*models.CurtainStatus, error)
 }
 
@@ -18,24 +20,30 @@ func NewCurtainRepository(db *gorm.DB) CurtainRepository {
 	return &curtainRepository{db: db}
 }
 
-// --- BAGIAN INI YANG MEMBUAT DIA JADI UPDATE ---
 func (r *curtainRepository) SaveStatus(curtain *models.CurtainStatus) error {
-	var existing models.CurtainStatus
+	return r.db.Create(curtain).Error
+}
 
-	// 1. Cek apakah sudah ada data gorden di database? (Ambil 1 data pertama)
-	err := r.db.First(&existing).Error
+func (r *curtainRepository) Update(curtain *models.CurtainStatus) error {
+	// Query 1: Get the existing curtain_id
+	var existingID uint
+	err := r.db.Model(&models.CurtainStatus{}).
+		Select("curtain_id").
+		Limit(1).
+		Pluck("curtain_id", &existingID).Error
 
-	if err == nil {
-		// KONDISI A: DATA SUDAH ADA -> LAKUKAN UPDATE
-		// Kita "bajak" ID dari data lama, lalu tempel ke data baru
-		curtain.CurtainID = existing.CurtainID
-		
-		// Simpan perubahan (Ini akan menimpa data lama)
-		return r.db.Save(curtain).Error
+	if err != nil {
+		return err
 	}
 
-	// KONDISI B: DATA KOSONG -> LAKUKAN INSERT BARU
-	return r.db.Create(curtain).Error
+	// Query 2: Update by explicit ID
+	return r.db.Model(&models.CurtainStatus{}).
+		Where("curtain_id = ?", existingID).
+		Updates(map[string]interface{}{
+			"status":    curtain.Status,
+			"mode":      curtain.Mode,
+			"timestamp": curtain.Timestamp,
+		}).Error
 }
 
 func (r *curtainRepository) GetLatest() (*models.CurtainStatus, error) {

@@ -32,6 +32,11 @@ type MQTTHandler struct {
 	lampMutex          sync.RWMutex
 	lastLampChangeTime time.Time
 
+	// Curtain state tracking
+	lastCurtainState      string
+	curtainMutex          sync.RWMutex
+	lastCurtainChangeTime time.Time
+
 	// ⭐ Gas moving average filter
 	gasReadings     []int
 	gasReadingMutex sync.Mutex
@@ -221,6 +226,56 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 			h.lampSvc.ProcessLamp("off", "auto")
 			h.lastLampState = "off"
 			h.lastLampChangeTime = time.Now()
+		}
+	}()
+
+	// Auto curtain control logic
+	go func() {
+		h.curtainMutex.Lock()
+		defer h.curtainMutex.Unlock()
+
+		currentStatus := h.lastCurtainState
+
+		// Get current mode from database
+		lastCurtain, err := h.curtainSvc.GetLatest()
+		currentMode := "auto"
+		if err == nil {
+			currentMode = lastCurtain.Mode
+			if lastCurtain.Status != currentStatus {
+				currentStatus = lastCurtain.Status
+				h.lastCurtainState = currentStatus
+			}
+		}
+
+		// Skip if manual mode
+		if currentMode == "manual" {
+			return
+		}
+
+		const (
+			thresholdGelap = 300
+			debounceDelay  = 5 * time.Second
+		)
+
+		// Debouncing
+		if time.Since(h.lastCurtainChangeTime) < debounceDelay {
+			return
+		}
+
+		// OPEN curtain if dark (let light in)
+		if data.Lux < thresholdGelap && currentStatus == "closed" {
+			h.PublishCurtainControl("open")
+			h.curtainSvc.ProcessCurtain("open", "auto")
+			h.lastCurtainState = "open"
+			h.lastCurtainChangeTime = time.Now()
+		}
+
+		// CLOSE curtain if bright (avoid glare)
+		if data.Lux > thresholdGelap && currentStatus == "open" {
+			h.PublishCurtainControl("close")
+			h.curtainSvc.ProcessCurtain("closed", "auto")
+			h.lastCurtainState = "closed"
+			h.lastCurtainChangeTime = time.Now()
 		}
 	}()
 
@@ -432,7 +487,7 @@ func (h *MQTTHandler) handleDoorStatus(client mqtt.Client, msg mqtt.Message) {
 		req.Method = "remote"
 	}
 
-	go h.doorSvc.ProcessDoor(req.Status, req.Method)
+	go h.doorSvc.ProcessDoor(req.Status, req.Method, nil)
 
 	wsData := map[string]interface{}{
 		"type":   "device_update",
@@ -499,7 +554,7 @@ func (h *MQTTHandler) handleDebug(client mqtt.Client, msg mqtt.Message) {
 
 // ==================== PIN VERIFICATION HANDLER ====================
 
-// handlePinVerification - 
+// handlePinVerification -
 func (h *MQTTHandler) handlePinVerification(client mqtt.Client, msg mqtt.Message) {
 	var req struct {
 		Pin string `json:"pin"`
@@ -534,7 +589,7 @@ func (h *MQTTHandler) handlePinVerification(client mqtt.Client, msg mqtt.Message
 	h.PublishDoorControl("unlock")
 
 	// Save access log to database (async)
-	go h.doorSvc.ProcessDoor("unlocked", "pin")
+	go h.doorSvc.ProcessDoor("unlocked", "pin", nil)
 
 	// Send success response to ESP32
 	h.publishPinVerificationResponse(true, "PIN verified, door unlocked")

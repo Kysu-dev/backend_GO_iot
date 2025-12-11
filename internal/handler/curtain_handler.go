@@ -3,6 +3,7 @@ package handler
 import (
 	"smarthome-backend/database/models"
 	"smarthome-backend/internal/service"
+
 	// "strconv" -> Hapus ini karena tidak dipakai lagi
 
 	"github.com/gin-gonic/gin"
@@ -17,14 +18,12 @@ func NewCurtainHandler(s service.CurtainService) *CurtainHandler {
 }
 
 func (h *CurtainHandler) Create(c *gin.Context) {
-	// 1. Gunakan struct yang baru dibuat
-	var req models.CurtainRequest 
+	var req models.CurtainRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{"success": false, "error": err.Error()})
 		return
 	}
 
-	// 2. Kirim Status (String), bukan Position (Int)
 	err := h.svc.ProcessCurtain(req.Status, req.Mode)
 	if err != nil {
 		c.JSON(500, gin.H{"success": false, "error": "Failed to save curtain status"})
@@ -45,5 +44,5 @@ func (h *CurtainHandler) GetLatest(c *gin.Context) {
 }
 
 // --- FUNGSI GetAll DIHAPUS ---
-// Karena kita hanya menyimpan 1 baris data (Upsert), 
+// Karena kita hanya menyimpan 1 baris data (Upsert),
 // maka tidak ada history yang bisa diambil.
