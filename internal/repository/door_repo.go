@@ -34,9 +34,21 @@ func (r *doorRepository) Update(door *models.DoorStatus) error {
 		return err
 	}
 
-	// Update using the retrieved door_id
-	query := "UPDATE door_status SET status = ?, method = ?, timestamp = NOW() WHERE door_id = ?"
-	return r.db.Exec(query, door.Status, door.Method, latestID).Error
+	// Update - only update method if it's not empty (to avoid ENUM constraint violation)
+	var query string
+	var args []interface{}
+
+	if door.Method == "" {
+		// Skip method update when empty
+		query = "UPDATE door_status SET status = ?, timestamp = NOW() WHERE door_id = ?"
+		args = []interface{}{door.Status, latestID}
+	} else {
+		// Update with method
+		query = "UPDATE door_status SET status = ?, method = ?, timestamp = NOW() WHERE door_id = ?"
+		args = []interface{}{door.Status, door.Method, latestID}
+	}
+
+	return r.db.Exec(query, args...).Error
 }
 
 func (r *doorRepository) GetLatest() (*models.DoorStatus, error) {

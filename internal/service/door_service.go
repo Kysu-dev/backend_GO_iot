@@ -35,10 +35,9 @@ func (s *doorService) ProcessDoor(status, method string, userID *uint) error {
 		// Belum ada data, CREATE
 		err = s.repo.Create(door)
 		if err != nil {
-			log.Printf("❌ Error creating door status: %v", err)
+			log.Printf("❌ Door error: %v", err)
 			return err
 		}
-		log.Printf("✅ Door status created: %s via %s", status, method)
 		return nil
 	}
 
@@ -46,10 +45,9 @@ func (s *doorService) ProcessDoor(status, method string, userID *uint) error {
 	if existing != nil && existing.DoorID > 0 {
 		err = s.repo.Update(door)
 		if err != nil {
-			log.Printf("❌ Error updating door status: %v", err)
+			log.Printf("❌ Door error: %v", err)
 			return err
 		}
-		log.Printf("✅ Door status updated: %s via %s", status, method)
 
 		// ⭐ Save to access log history (async) dengan user_id
 		go s.saveAccessLog(status, method, userID)
@@ -60,10 +58,9 @@ func (s *doorService) ProcessDoor(status, method string, userID *uint) error {
 	// Fallback: CREATE jika kondisi tidak terpenuhi
 	err = s.repo.Create(door)
 	if err != nil {
-		log.Printf("❌ Error creating door status: %v", err)
+		log.Printf("❌ Door error: %v", err)
 		return err
 	}
-	log.Printf("✅ Door status created: %s via %s", status, method)
 	return nil
 }
 
@@ -75,8 +72,22 @@ func (s *doorService) GetHistory(limit int) ([]models.DoorStatus, error) {
 	return s.repo.GetHistory(limit)
 }
 
-// saveAccessLog - Save door access to history
 func (s *doorService) saveAccessLog(status, method string, userID *uint) {
+
+	validMethods := map[string]bool{
+		"face":   true,
+		"pin":    true,
+		"remote": true,
+	}
+
+	if method == "face" {
+		return
+	}
+
+	if !validMethods[method] {
+		return
+	}
+
 	// Determine if access was successful (unlocked = success)
 	accessStatus := "failed"
 	if status == "unlocked" {

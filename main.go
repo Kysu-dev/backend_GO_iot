@@ -18,8 +18,7 @@ import (
 
 func main() {
 	log.Println("╔════════════════════════════════════════╗")
-	log.Println("║   Smart Home IoT Backend Server        ║")
-	log.Println("║           Starting...                  ║")
+	log.Println("║   🏠 Smart Home IoT Backend           ║")
 	log.Println("╚════════════════════════════════════════╝")
 
 	// 1. Load Config & DB
@@ -29,7 +28,6 @@ func main() {
 	// 2. Init WebSocket
 	wsHub := websocket.NewHub()
 	go wsHub.Run()
-	log.Println("✅ WebSocket Hub Running")
 
 	// 3. Init Repositories
 	gasRepo := repository.NewGasRepository(db)
@@ -57,7 +55,7 @@ func main() {
 	notifSvc := service.NewNotificationService(notifRepo)
 	pinSvc := service.NewPinService(pinRepo)
 
-	// Sesuaikan IP ini dengan IP Laptop yang menjalankan Python Face Rec
+	// Server Python Face Rec
 	authSvc := service.NewAuthService("http://10.124.88.112:5001", "jwt-secret-key")
 
 	// =========================================================================
@@ -69,9 +67,8 @@ func main() {
 	// --- A. ID UNIK (PENTING) ---
 	// Menggunakan Nano Second agar ID selalu beda tiap kali run.
 	// Ini mencegah error "Connection Lost" karena rebutan ID.
-	randomID := fmt.Sprintf("backend_felix_%d", time.Now().UnixNano())
+	randomID := fmt.Sprintf("backend_%d", time.Now().UnixNano())
 	opts.SetClientID(randomID)
-	log.Printf("🆔 MQTT Client ID: %s", randomID)
 
 	opts.SetCleanSession(true)
 	opts.SetAutoReconnect(true)
@@ -84,10 +81,10 @@ func main() {
 	// ------------------------------------------------------
 
 	opts.OnConnectionLost = func(c mqttLib.Client, err error) {
-		log.Printf("⚠️ MQTT Connection Lost: %v", err)
+		log.Println("⚠️ MQTT disconnected")
 	}
 	opts.OnConnect = func(c mqttLib.Client) {
-		log.Println("✅ Connected/Reconnected to MQTT Broker (HiveMQ)")
+		log.Println("✅ MQTT connected")
 	}
 
 	mqttClient := mqttLib.NewClient(opts)
@@ -158,10 +155,8 @@ func main() {
 	r := router.InitRouter(routerCfg)
 
 	// 10. Run Server
-	log.Println("\n╔════════════════════════════════════════╗")
-	log.Printf("║  🚀 Server running on port %s            ║\n", cfg.ServerPort)
-	log.Println("║  📱 API: http://localhost:" + cfg.ServerPort + "      ║")
-	log.Println("║  📡 MQTT: " + cfg.MQTTBroker + "       ║")
+	log.Println("╔════════════════════════════════════════╗")
+	log.Printf("║  🚀 Server: http://localhost:%s       ║", cfg.ServerPort)
 	log.Println("╚════════════════════════════════════════╝")
 
 	r.Run(":" + cfg.ServerPort)

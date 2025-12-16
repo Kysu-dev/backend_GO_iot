@@ -75,6 +75,8 @@ func NewMQTTHandler(
 }
 
 func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
+	h.client = client
+
 	topics := map[string]mqtt.MessageHandler{
 		"iotcihuy/home/temperature":    h.handleTemperature,
 		"iotcihuy/home/humidity":       h.handleHumidity,
@@ -87,12 +89,16 @@ func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
 		"iotcihuy/home/debug":          h.handleDebug,
 	}
 
+	log.Printf("🔌 [MQTT] Connecting to broker... (Client connected: %v)", client.IsConnected())
+
 	for topic, handler := range topics {
 		if token := client.Subscribe(topic, 0, handler); token.Wait() && token.Error() != nil {
-			log.Printf("[ERROR] Subscribe Failed | Topic: %s | Error: %v", topic, token.Error())
+			log.Printf("❌ [MQTT] Subscribe failed: %s | Error: %v", topic, token.Error())
+		} else {
+			log.Printf("✅ [MQTT] Subscribed: %s", topic)
 		}
 	}
-	log.Println("[INFO] ✅ MQTT Handler Ready. Monitoring all topics...")
+	log.Println("✅ [MQTT] All topics subscribed and ready")
 }
 
 // ==================== CONTROL FUNCTIONS (OUTPUT) ====================
@@ -104,11 +110,15 @@ func (h *MQTTHandler) PublishDoorControl(action string) error {
 		"method": "remote",
 	}
 	jsonPayload, _ := json.Marshal(payload)
+	log.Printf("📤 [MQTT] Publishing to %s: action=%s", topic, action)
+
 	token := h.client.Publish(topic, 1, false, jsonPayload)
 	token.Wait()
 
-	if token.Error() == nil {
-		log.Printf("[CONTROL] 🚪 Door → %s", action)
+	if token.Error() != nil {
+		log.Printf("❌ [MQTT] Publish failed: %s | Error: %v", topic, token.Error())
+	} else {
+		log.Printf("✅ [MQTT] Published: 🚪 Door control: %s", action)
 	}
 	return token.Error()
 }
@@ -120,11 +130,15 @@ func (h *MQTTHandler) PublishBuzzerControl(action string) {
 		"source": "auto_alert",
 	}
 	jsonPayload, _ := json.Marshal(payload)
+	log.Printf("📤 [MQTT] Publishing to %s: action=%s", topic, action)
+
 	token := h.client.Publish(topic, 0, false, jsonPayload)
 	token.Wait()
 
 	if token.Error() == nil {
-		log.Printf("[CONTROL] 🚨 Buzzer → %s", action)
+		log.Printf("✅ [MQTT] Published: 🚨 Buzzer %s", action)
+	} else {
+		log.Printf("❌ [MQTT] Buzzer publish failed: %v", token.Error())
 	}
 }
 
@@ -136,12 +150,15 @@ func (h *MQTTHandler) PublishLampControl(action string) {
 		"mode":   "auto",
 	}
 	jsonPayload, _ := json.Marshal(payload)
+	log.Printf("📤 [MQTT] Publishing to %s: action=%s, mode=auto", topic, action)
 
 	token := h.client.Publish(topic, 1, false, jsonPayload)
 	token.Wait()
 
 	if token.Error() == nil {
-		log.Printf("[CONTROL] 💡 Lamp → %s (auto)", action)
+		log.Printf("✅ [MQTT] Published: 💡 Lamp %s (auto mode)", action)
+	} else {
+		log.Printf("❌ [MQTT] Lamp publish failed: %v", token.Error())
 	}
 }
 
@@ -151,12 +168,17 @@ func (h *MQTTHandler) PublishCurtainControl(action string) error {
 		"action": action,
 	}
 	jsonPayload, _ := json.Marshal(payload)
+	log.Printf("📤 [MQTT] Publishing to %s: action=%s", topic, action)
+
 	token := h.client.Publish(topic, 1, false, jsonPayload)
 	token.Wait()
 
 	if token.Error() == nil {
-		log.Printf("[CONTROL] 🪟 Curtain → %s", action)
+		log.Printf("✅ [MQTT] Published: 🪟 Curtain → %s", action)
+	} else {
+		log.Printf("❌ [MQTT] Curtain publish failed: %v", token.Error())
 	}
+
 	return token.Error()
 }
 
@@ -168,9 +190,10 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 		Unit string `json:"unit"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
-		log.Printf("[ERROR] JSON Parse Light Failed: %v | Payload: %s", err, string(msg.Payload()))
 		return
 	}
+
+	log.Printf("💡 Light: %d Lux", data.Lux)
 
 	// Save to database
 	go func() {
@@ -203,8 +226,8 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 		}
 
 		const (
-			thresholdGelap = 300
-			debounceDelay  = 5 * time.Second
+			luxThreshold  = 500
+			debounceDelay = 5 * time.Second
 		)
 
 		// Debouncing
@@ -212,16 +235,16 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 			return
 		}
 
-		// Turn ON if dark
-		if data.Lux < thresholdGelap && currentStatus == "off" {
+		// Turn ON if dark (Lux < 500)
+		if data.Lux < luxThreshold && currentStatus == "off" {
 			h.PublishLampControl("on")
 			h.lampSvc.ProcessLamp("on", "auto")
 			h.lastLampState = "on"
 			h.lastLampChangeTime = time.Now()
 		}
 
-		// Turn OFF if bright
-		if data.Lux > thresholdGelap && currentStatus == "on" {
+		// Turn OFF if bright (Lux >= 500)
+		if data.Lux >= luxThreshold && currentStatus == "on" {
 			h.PublishLampControl("off")
 			h.lampSvc.ProcessLamp("off", "auto")
 			h.lastLampState = "off"
@@ -253,8 +276,8 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 		}
 
 		const (
-			thresholdGelap = 300
-			debounceDelay  = 5 * time.Second
+			luxThreshold  = 500
+			debounceDelay = 5 * time.Second
 		)
 
 		// Debouncing
@@ -262,25 +285,24 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 			return
 		}
 
-		// OPEN curtain if dark (let light in)
-		if data.Lux < thresholdGelap && currentStatus == "closed" {
-			h.PublishCurtainControl("open")
-			h.curtainSvc.ProcessCurtain("open", "auto")
-			h.lastCurtainState = "open"
-			h.lastCurtainChangeTime = time.Now()
-		}
-
-		// CLOSE curtain if bright (avoid glare)
-		if data.Lux > thresholdGelap && currentStatus == "open" {
+		// CLOSE curtain if dark (Lux < 500) - Lamp is ON, keep gorden closed
+		if data.Lux < luxThreshold && currentStatus == "open" {
 			h.PublishCurtainControl("close")
 			h.curtainSvc.ProcessCurtain("closed", "auto")
 			h.lastCurtainState = "closed"
 			h.lastCurtainChangeTime = time.Now()
 		}
+
+		// OPEN curtain if bright (Lux >= 500) - Use natural light
+		if data.Lux >= luxThreshold && currentStatus == "closed" {
+			h.PublishCurtainControl("open")
+			h.curtainSvc.ProcessCurtain("open", "auto")
+			h.lastCurtainState = "open"
+			h.lastCurtainChangeTime = time.Now()
+		}
 	}()
 
 	h.wsHub.BroadcastData(msg.Payload())
-	log.Printf("[SENSOR] 💡 Light: %d lux", data.Lux)
 }
 
 // ⭐ IMPROVED GAS HANDLER WITH MOVING AVERAGE
@@ -294,14 +316,17 @@ func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
+	log.Printf("💨 Gas: %d PPM (Raw)", data.PPM)
+
 	go func() {
 		// Check if lamp just changed (stabilization period)
 		h.lampMutex.RLock()
 		timeSinceLampChange := time.Since(h.lastLampChangeTime)
 		h.lampMutex.RUnlock()
 
-		// Skip readings during lamp stabilization (15 seconds)
-		if timeSinceLampChange < 15*time.Second {
+		// Skip readings during lamp stabilization (10 seconds - same as ESP32 GAS_SKIP_DURATION)
+		if timeSinceLampChange < 10*time.Second {
+			log.Printf("⏭️  Gas: SKIPPED (Lamp stabilization: %.1fs remaining)", 10-(timeSinceLampChange.Seconds()))
 			return
 		}
 
@@ -327,6 +352,8 @@ func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
 			return
 		}
 
+		log.Printf("💨 Gas: %d PPM (Avg from %d readings)", avgPPM, len(h.gasReadings))
+
 		// ⭐ Hysteresis threshold for buzzer (using averaged PPM)
 		const (
 			thresholdDanger = 800 // Turn buzzer ON
@@ -350,22 +377,23 @@ func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
 	}()
 
 	h.wsHub.BroadcastData(msg.Payload())
-	log.Printf("[SENSOR] 💨 Gas: %d ppm", data.PPM)
 }
 
 func (h *MQTTHandler) handleTemperature(client mqtt.Client, msg mqtt.Message) {
+	log.Printf("📥 [MQTT] Received on %s: %s", msg.Topic(), string(msg.Payload()))
+
 	var data struct {
 		Temperature float64 `json:"temperature"`
 		Unit        string  `json:"unit"`
 	}
 	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
-		log.Printf("[ERROR] JSON Parse Temp Failed: %v | Payload: %s", err, string(msg.Payload()))
+		log.Printf("❌ [MQTT] JSON Parse Temp Failed: %v | Payload: %s", err, string(msg.Payload()))
 		return
 	}
 
+	log.Printf("✅ [MQTT] 🌡️  Temperature: %.1f°C", data.Temperature)
 	go h.tempSvc.ProcessTemp(data.Temperature)
 	h.wsHub.BroadcastData(msg.Payload())
-	log.Printf("[SENSOR] 🌡️  Temp: %.1f°C", data.Temperature)
 }
 
 func (h *MQTTHandler) handleHumidity(client mqtt.Client, msg mqtt.Message) {
@@ -378,9 +406,9 @@ func (h *MQTTHandler) handleHumidity(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
+	log.Printf("💧 Humidity: %.1f%%", data.Humidity)
 	go h.humidSvc.ProcessHumid(data.Humidity)
 	h.wsHub.BroadcastData(msg.Payload())
-	log.Printf("[SENSOR] 💧 Humidity: %.1f%%", data.Humidity)
 }
 
 // ==================== DEVICE STATUS HANDLERS ====================
@@ -416,10 +444,26 @@ func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
 	h.gasReadings = make([]int, 0, h.maxGasReadings)
 	h.gasReadingMutex.Unlock()
 
+	// ⭐ FORCE publish gas = 0 saat lamp ON (EMI noise prevention)
+	if req.Status == "on" {
+		gasForcedZero := map[string]interface{}{
+			"type":     "sensor_update",
+			"sensor":   "gas",
+			"ppm":      0,
+			"unit":     "PPM",
+			"enforced": "lamp_stabilization",
+		}
+		jsonData, _ := json.Marshal(gasForcedZero)
+		h.wsHub.BroadcastData(jsonData)
+		log.Printf("💨 Gas: FORCED 0 PPM (Lamp ON - stabilization period)")
+	}
+
 	// Only save to database if mode changed OR status changed in manual mode
 	if modeChanged || req.Mode == "manual" {
 		go h.lampSvc.ProcessLamp(req.Status, req.Mode)
-		log.Printf("[STATUS] 💡 Lamp: %s (%s)", req.Status, req.Mode)
+		if modeChanged {
+			log.Printf("💡 Lamp: %s (mode: %s)", req.Status, req.Mode)
+		}
 	}
 
 	// Trigger auto control immediately if switched to auto mode
@@ -434,21 +478,21 @@ func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
 				return
 			}
 
-			const thresholdGelap = 300
+			const luxThreshold = 500
 
 			h.lampMutex.Lock()
 			currentStatus := h.lastLampState
 			h.lampMutex.Unlock()
 
 			// Apply auto logic based on current lux
-			if latestLight.Lux < thresholdGelap && currentStatus == "off" {
+			if latestLight.Lux < luxThreshold && currentStatus == "off" {
 				h.PublishLampControl("on")
 				h.lampSvc.ProcessLamp("on", "auto")
 				h.lampMutex.Lock()
 				h.lastLampState = "on"
 				h.lastLampChangeTime = time.Now()
 				h.lampMutex.Unlock()
-			} else if latestLight.Lux > thresholdGelap && currentStatus == "on" {
+			} else if latestLight.Lux >= luxThreshold && currentStatus == "on" {
 				h.PublishLampControl("off")
 				h.lampSvc.ProcessLamp("off", "auto")
 				h.lampMutex.Lock()
@@ -489,6 +533,10 @@ func (h *MQTTHandler) handleDoorStatus(client mqtt.Client, msg mqtt.Message) {
 
 	go h.doorSvc.ProcessDoor(req.Status, req.Method, nil)
 
+	if req.Status == "unlocked" {
+		log.Printf("🚪 Access: %s", req.Method)
+	}
+
 	wsData := map[string]interface{}{
 		"type":   "device_update",
 		"device": "door",
@@ -497,7 +545,6 @@ func (h *MQTTHandler) handleDoorStatus(client mqtt.Client, msg mqtt.Message) {
 	}
 	jsonData, _ := json.Marshal(wsData)
 	h.wsHub.BroadcastData(jsonData)
-	log.Printf("[STATUS] 🚪 Door: %s (%s)", req.Status, req.Method)
 }
 
 func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) {
@@ -511,7 +558,17 @@ func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) 
 		return
 	}
 
+	// Get previous status to detect changes
+	lastCurtain, _ := h.curtainSvc.GetLatest()
+	statusChanged := lastCurtain == nil || lastCurtain.Status != req.Status
+	modeChanged := lastCurtain == nil || lastCurtain.Mode != req.Mode
+
 	go h.curtainSvc.ProcessCurtain(req.Status, req.Mode)
+
+	// Only log if something actually changed
+	if statusChanged || modeChanged {
+		log.Printf("🪟 Curtain: %s (mode: %s)", req.Status, req.Mode)
+	}
 
 	wsData := map[string]interface{}{
 		"type":   "device_update",
@@ -521,35 +578,11 @@ func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) 
 	}
 	jsonData, _ := json.Marshal(wsData)
 	h.wsHub.BroadcastData(jsonData)
-	log.Printf("[STATUS] 🪟 Curtain: %s (%s)", req.Status, req.Mode)
 }
 
 func (h *MQTTHandler) handleDebug(client mqtt.Client, msg mqtt.Message) {
-	var data map[string]interface{}
-	if err := json.Unmarshal(msg.Payload(), &data); err != nil {
-		log.Printf("[ERROR] JSON Parse Debug Failed: %v", err)
-		return
-	}
-
-	log.Println("\n╔═════════════════════════════════════════════════════╗")
-	log.Println("║           🔍 ESP32 DEBUG TELEMETRY                  ║")
-	log.Println("╠═════════════════════════════════════════════════════╣")
-	log.Printf("║  Lamp State       : %-3s                            ║", data["lamp_state"])
-	log.Printf("║  Lamp Mode        : %-6s                         ║", data["lamp_mode"])
-	log.Printf("║  Toggle Count     : %.0f                            ║", data["lamp_toggle_count"])
-	log.Printf("║  Time Since Chg   : %.0fms (%.1fs)                 ║",
-		data["lamp_change_time_ago_ms"],
-		data["lamp_change_time_ago_ms"].(float64)/1000.0)
-	log.Println("╠─────────────────────────────────────────────────────╣")
-	log.Printf("║  Gas PPM (current): %.0f                            ║", data["gas_current_ppm"])
-	log.Printf("║  MQ2 Raw ADC      : %.0f                            ║", data["mq2_raw_adc"])
-	log.Printf("║  MQ2 Baseline     : %.0f                            ║", data["mq2_baseline"])
-	log.Printf("║  Gas Skip Count   : %.0f                            ║", data["gas_skip_count"])
-	log.Printf("║  Gas Read Count   : %.0f                            ║", data["gas_read_count"])
-	log.Println("╠─────────────────────────────────────────────────────╣")
-	log.Printf("║  Free Heap        : %.0f bytes                      ║", data["free_heap"])
-	log.Printf("║  Uptime           : %.0fs                           ║", data["uptime_sec"])
-	log.Println("╚═════════════════════════════════════════════════════╝")
+	// Debug telemetry disabled for cleaner output
+	// Data still received and processed by WebSocket
 }
 
 // ==================== PIN VERIFICATION HANDLER ====================
@@ -561,12 +594,9 @@ func (h *MQTTHandler) handlePinVerification(client mqtt.Client, msg mqtt.Message
 	}
 
 	if err := json.Unmarshal(msg.Payload(), &req); err != nil {
-		log.Printf("[ERROR] JSON Parse PIN Failed: %v | Payload: %s", err, string(msg.Payload()))
 		h.publishPinVerificationResponse(false, "Invalid format")
 		return
 	}
-
-	log.Printf("[VERIFY] 🔐 PIN Request: %s", req.Pin)
 
 	// Get universal PIN from database
 	pinData, err := h.pinSvc.GetUniversalPin()
@@ -578,12 +608,12 @@ func (h *MQTTHandler) handlePinVerification(client mqtt.Client, msg mqtt.Message
 
 	// Verify PIN
 	if req.Pin != pinData.UniversalPin {
-		log.Printf("[VERIFY] ❌ Invalid PIN attempt")
+		log.Println("❌ Invalid PIN")
 		h.publishPinVerificationResponse(false, "Invalid PIN")
 		return
 	}
 
-	log.Printf("[VERIFY] ✅ Valid PIN: Sending unlock command")
+	log.Println("✅ Valid PIN")
 
 	// Send unlock command via MQTT
 	h.PublishDoorControl("unlock")
@@ -608,12 +638,4 @@ func (h *MQTTHandler) publishPinVerificationResponse(valid bool, message string)
 
 	token := h.client.Publish(topic, 1, false, jsonPayload)
 	token.Wait()
-
-	if token.Error() == nil {
-		status := "✅"
-		if !valid {
-			status = "❌"
-		}
-		log.Printf("[RESPONSE] %s PIN → valid: %v", status, valid)
-	}
 }

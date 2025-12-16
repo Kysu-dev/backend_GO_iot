@@ -93,7 +93,7 @@ func (h *FaceHandler) RecognizeFace(c *gin.Context) {
 	// 2. Save to access log
 	var userID *uint
 	var accessStatus string
-	var accessMethod string = "remote" // Face recognition dianggap remote access
+	var accessMethod string = "face" // Face recognition dianggap remote access
 
 	if pythonResp.Recognized {
 		userID = &pythonResp.UserID
