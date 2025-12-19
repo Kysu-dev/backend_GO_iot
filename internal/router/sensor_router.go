@@ -170,6 +170,11 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			user.GET("/:id", cfg.UserHandler.GetByID)
 			user.PUT("/:id", cfg.UserHandler.Update)
 			user.DELETE("/:id", cfg.UserHandler.Delete)
+
+			// Profile management
+			user.PUT("/:id/profile", cfg.UserHandler.UpdateProfile)
+			user.PUT("/:id/password", cfg.UserHandler.ChangePassword)
+			user.POST("/:id/re-enroll-face", cfg.UserHandler.ReEnrollFace)
 		}
 
 		// ==================== AUTH ENDPOINTS ====================

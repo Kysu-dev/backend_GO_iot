@@ -37,6 +37,20 @@ type UpdateUserRequest struct {
 	Status string `json:"status" binding:"required,oneof=active pending rejected"`
 }
 
+type UpdateProfileRequest struct {
+	Name  string `json:"name" binding:"required"`
+	Email string `json:"email" binding:"required,email"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password" binding:"required,min=6"`
+}
+
+type ReEnrollFaceRequest struct {
+	Image string `json:"image" binding:"required"`
+}
+
 // LoginResponse after successful authentication
 type LoginResponse struct {
 	Token string `json:"token"`

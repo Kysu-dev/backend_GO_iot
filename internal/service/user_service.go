@@ -1,6 +1,8 @@
 package service
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -28,6 +30,10 @@ type UserService interface {
 	GetAdminByID(id uint) (*models.User, error)
 	UpdateAdmin(id uint, req models.UpdateUserRequest) (*models.User, error)
 	DeleteAdmin(id uint) error
+	// Profile management
+	UpdateProfile(id uint, req models.UpdateProfileRequest) (*models.User, error)
+	ChangePassword(id uint, req models.ChangePasswordRequest) error
+	ReEnrollFace(id uint, imageBase64 string) (*models.User, error)
 }
 
 type userService struct {
@@ -269,6 +275,133 @@ func (s *userService) UpdateUser(id uint, req models.UpdateUserRequest) (*models
 		return nil, err
 	}
 
+	return user, nil
+}
+
+// Profile Management Methods
+
+func (s *userService) UpdateProfile(id uint, req models.UpdateProfileRequest) (*models.User, error) {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	// Check if email is being changed and already exists
+	if user.Email != req.Email {
+		existing, err := s.repo.FindByEmail(req.Email)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, err
+			}
+		} else if existing != nil && existing.UserID != id {
+			return nil, errors.New("email already in use")
+		}
+	}
+
+	// Update only name and email (role and status cannot be changed by user)
+	user.Name = req.Name
+	user.Email = req.Email
+
+	err = s.repo.Update(user)
+	if err != nil {
+		return nil, err
+	}
+
+	return user, nil
+}
+
+func (s *userService) ChangePassword(id uint, req models.ChangePasswordRequest) error {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return errors.New("user not found")
+	}
+
+	// Verify current password
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.CurrentPassword))
+	if err != nil {
+		return errors.New("current password is incorrect")
+	}
+
+	// Hash new password
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		return err
+	}
+
+	// Update password
+	user.Password = string(hashedPassword)
+	err = s.repo.Update(user)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *userService) ReEnrollFace(id uint, imageBase64 string) (*models.User, error) {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+
+	// 1. Delete old face encoding if exists
+	if user.FaceEncodingPath != "" {
+		pythonServiceURL := "http://localhost:5000"
+		deleteURL := fmt.Sprintf("%s/faces/%d", pythonServiceURL, id)
+
+		req, _ := http.NewRequest("DELETE", deleteURL, nil)
+		client := &http.Client{}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("⚠️  Failed to delete old face encoding: %v\n", err)
+		} else {
+			defer resp.Body.Close()
+			if resp.StatusCode == 200 {
+				fmt.Printf("✅ Old face encoding deleted for user_id: %d\n", id)
+			}
+		}
+	}
+
+	// 2. Enroll new face via Python service
+	enrollURL := "http://localhost:5000/enroll"
+	payload := map[string]interface{}{
+		"user_id": id,
+		"name":    user.Name,
+		"image":   imageBase64,
+	}
+
+	jsonData, _ := json.Marshal(payload)
+	resp, err := http.Post(enrollURL, "application/json", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return nil, errors.New("failed to enroll face: " + err.Error())
+	}
+	defer resp.Body.Close()
+
+	var result map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&result)
+
+	success, ok := result["success"].(bool)
+	if !ok || !success {
+		errorMsg := "face enrollment failed"
+		if errStr, ok := result["error"].(string); ok {
+			errorMsg = errStr
+		}
+		return nil, errors.New(errorMsg)
+	}
+
+	// 3. Update face_encoding_path in database
+	newPath, ok := result["face_encoding_path"].(string)
+	if !ok {
+		return nil, errors.New("invalid response from face service")
+	}
+
+	err = s.repo.UpdateFacePath(id, newPath)
+	if err != nil {
+		return nil, err
+	}
+
+	user.FaceEncodingPath = newPath
+	fmt.Printf("✅ Face re-enrolled successfully for user_id: %d, new path: %s\n", id, newPath)
 	return user, nil
 }
 

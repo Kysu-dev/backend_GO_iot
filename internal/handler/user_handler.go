@@ -164,3 +164,71 @@ func (h *UserHandler) Delete(c *gin.Context) {
 
 	c.JSON(200, gin.H{"success": true, "message": "User deleted successfully"})
 }
+
+// Profile Management Handlers
+
+func (h *UserHandler) UpdateProfile(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": "Invalid user ID"})
+		return
+	}
+
+	var req models.UpdateProfileRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	user, err := h.svc.UpdateProfile(uint(id), req)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true, "message": "Profile updated successfully", "data": user})
+}
+
+func (h *UserHandler) ChangePassword(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": "Invalid user ID"})
+		return
+	}
+
+	var req models.ChangePasswordRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	err = h.svc.ChangePassword(uint(id), req)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true, "message": "Password changed successfully"})
+}
+
+func (h *UserHandler) ReEnrollFace(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": "Invalid user ID"})
+		return
+	}
+
+	var req models.ReEnrollFaceRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": "Image is required"})
+		return
+	}
+
+	user, err := h.svc.ReEnrollFace(uint(id), req.Image)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true, "message": "Face re-enrolled successfully", "data": user})
+}
