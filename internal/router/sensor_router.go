@@ -187,6 +187,13 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			admin.POST("/users/:id/approve", cfg.AdminHandler.Approve)
 			admin.POST("/users/:id/reject", cfg.AdminHandler.Reject)
 
+			// Admin CRUD
+			admin.POST("/admins", cfg.AdminHandler.CreateAdmin)
+			admin.GET("/admins", cfg.AdminHandler.ListAdmins)
+			admin.GET("/admins/:id", cfg.AdminHandler.GetAdminByID)
+			admin.PUT("/admins/:id", cfg.AdminHandler.UpdateAdmin)
+			admin.DELETE("/admins/:id", cfg.AdminHandler.DeleteAdmin)
+
 			// Universal PIN Management
 			admin.GET("/pin", cfg.AdminHandler.GetUniversalPin)
 			admin.POST("/pin", cfg.AdminHandler.SetUniversalPin)
