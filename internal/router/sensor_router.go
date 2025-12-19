@@ -1,185 +1,225 @@
 package router
 
 import (
-	"smarthome-backend/internal/handler"
-	"smarthome-backend/internal/websocket"
+    "smarthome-backend/internal/handler"
+    "smarthome-backend/internal/websocket"
+    "time"
 
-	"github.com/gin-gonic/gin"
+    "github.com/gin-contrib/cors"
+    "github.com/gin-gonic/gin"
 )
 
 type AppConfig struct {
-	// Sensor Handlers
-	GasHandler   *handler.GasHandler
-	TempHandler  *handler.TempHandler
-	HumidHandler *handler.HumidHandler
-	LightHandler *handler.LightHandler
+    // Sensor Handlers
+    GasHandler   *handler.GasHandler
+    TempHandler  *handler.TempHandler
+    HumidHandler *handler.HumidHandler
+    LightHandler *handler.LightHandler
 
-	// Device Handlers
-	DoorHandler    *handler.DoorHandler
-	LampHandler    *handler.LampHandler
-	CurtainHandler *handler.CurtainHandler
+    // Device Handlers
+    DoorHandler    *handler.DoorHandler
+    LampHandler    *handler.LampHandler
+    CurtainHandler *handler.CurtainHandler
 
-	// User & Auth Handlers
-	UserHandler      *handler.UserHandler
-	AccessLogHandler *handler.AccessLogHandler
-	AuthHandler      *handler.AuthHandler
-	AdminHandler     *handler.AdminHandler
+    // User & Auth Handlers
+    UserHandler      *handler.UserHandler
+    AccessLogHandler *handler.AccessLogHandler
+    AuthHandler      *handler.AuthHandler
+    AdminHandler     *handler.AdminHandler
 
-	// Notification Handler
-	NotificationHandler *handler.NotificationHandler
+    // Notification Handler
+    NotificationHandler *handler.NotificationHandler
 
-	// Device Control Handler
-	DeviceControlHandler *handler.DeviceControlHandler
+    // Device Control Handler
+    DeviceControlHandler *handler.DeviceControlHandler
 
-	// Face Recognition Handler
-	FaceHandler *handler.FaceHandler
+    // Face Recognition Handler
+    FaceHandler *handler.FaceHandler
 
-	// WebSocket Hub
-	WsHub *websocket.Hub
+    // WebSocket Hub
+    WsHub *websocket.Hub
 }
 
 func InitRouter(cfg AppConfig) *gin.Engine {
-	r := gin.Default()
+    r := gin.Default()
 
-	// CORS Middleware
-	r.Use(func(c *gin.Context) {
-		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
-		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
-		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")
+    // ==================== NGROK-FRIENDLY CORS CONFIG ====================
+    r.Use(cors.New(cors.Config{
+        AllowAllOrigins: true,
+        AllowMethods:    []string{"GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"},
+        AllowHeaders: []string{
+            "Origin",
+            "Content-Type",
+            "Authorization",
+            "Accept",
+            "X-Requested-With",
+            "ngrok-skip-browser-warning", 
+            "Content-Length",
+            "Accept-Encoding",
+            "X-CSRF-Token",
+            "Cache-Control",
+            "User-Agent", 
+        },
+        ExposeHeaders: []string{
+            "Content-Length",
+            "Content-Type",
+            "ngrok-skip-browser-warning",
+        },
+        AllowCredentials: false,
+        MaxAge:           12 * time.Hour,
+    }))
 
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
-			return
-		}
+    // ==================== MANUAL CORS MIDDLEWARE (ENHANCED FOR NGROK) ====================
+    r.Use(func(c *gin.Context) {
+        origin := c.Request.Header.Get("Origin")
+        
+        // Allow all origins
+        if origin != "" {
+            c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+        } else {
+            c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+        }
+        
+        c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
+        c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, ngrok-skip-browser-warning, User-Agent")
+        c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
+        c.Writer.Header().Set("Access-Control-Expose-Headers", "Content-Length, Content-Type")
+        
+        // ⭐ Ngrok header passthrough
+        c.Writer.Header().Set("ngrok-skip-browser-warning", "true")
 
-		c.Next()
-	})
+        // ⭐ PREFLIGHT REQUEST HANDLING
+        if c.Request.Method == "OPTIONS" {
+            c.AbortWithStatus(204)
+            return
+        }
 
-	// Health Check
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{
-			"status":  "healthy",
-			"service": "smart-home-backend",
-			"version": "1.0.0",
-		})
-	})
+        c.Next()
+    })
 
-	// API Routes
-	api := r.Group("/api")
-	{
-		// ==================== SENSOR ENDPOINTS ====================
-		sensor := api.Group("/sensor")
-		{
-			// Gas Sensor
-			sensor.POST("/gas", cfg.GasHandler.Create)
-			sensor.GET("/gas", cfg.GasHandler.GetAll)
+    // Health Check
+    r.GET("/health", func(c *gin.Context) {
+        c.JSON(200, gin.H{
+            "status":  "healthy",
+            "service": "smart-home-backend",
+            "version": "1.0.0",
+        })
+    })
 
-			// Temperature Sensor
-			sensor.POST("/temperature", cfg.TempHandler.Create)
-			sensor.GET("/temperature", cfg.TempHandler.GetAll)
+    // API Routes
+    api := r.Group("/api")
+    {
+        // ==================== SENSOR ENDPOINTS ====================
+        sensor := api.Group("/sensor")
+        {
+            // Gas Sensor
+            sensor.POST("/gas", cfg.GasHandler.Create)
+            sensor.GET("/gas", cfg.GasHandler.GetAll)
 
-			// Humidity Sensor
-			sensor.POST("/humidity", cfg.HumidHandler.Create)
-			sensor.GET("/humidity", cfg.HumidHandler.GetAll)
+            // Temperature Sensor
+            sensor.POST("/temperature", cfg.TempHandler.Create)
+            sensor.GET("/temperature", cfg.TempHandler.GetAll)
 
-			// Light Sensor
-			sensor.POST("/light", cfg.LightHandler.Create)
-			sensor.GET("/light", cfg.LightHandler.GetAll)
-		}
+            // Humidity Sensor
+            sensor.POST("/humidity", cfg.HumidHandler.Create)
+            sensor.GET("/humidity", cfg.HumidHandler.GetAll)
 
-		// ==================== DEVICE STATUS ENDPOINTS ====================
-		device := api.Group("/device")
-		{
-			// Door Status
-			device.POST("/door", cfg.DoorHandler.Create)
-			device.GET("/door/latest", cfg.DoorHandler.GetLatest)
-			device.GET("/door/history", cfg.DoorHandler.GetAll)
-			device.POST("/door/verify-pin", cfg.DoorHandler.VerifyPin)
+            // Light Sensor
+            sensor.POST("/light", cfg.LightHandler.Create)
+            sensor.GET("/light", cfg.LightHandler.GetAll)
+        }
 
-			// Lamp Status
-			device.POST("/lamp", cfg.LampHandler.Create)
-			device.GET("/lamp/latest", cfg.LampHandler.GetLatest)
-			device.GET("/lamp/history", cfg.LampHandler.GetAll)
+        // ==================== DEVICE STATUS ENDPOINTS ====================
+        device := api.Group("/device")
+        {
+            // Door Status
+            device.POST("/door", cfg.DoorHandler.Create)
+            device.GET("/door/latest", cfg.DoorHandler.GetLatest)
+            device.GET("/door/history", cfg.DoorHandler.GetAll)
+            device.POST("/door/verify-pin", cfg.DoorHandler.VerifyPin)
 
-			// Curtain Status
-			// NOTE: History dihapus karena menggunakan logika Single Row Update
-			device.POST("/curtain", cfg.CurtainHandler.Create)
-			device.GET("/curtain/latest", cfg.CurtainHandler.GetLatest)
-		}
+            // Lamp Status
+            device.POST("/lamp", cfg.LampHandler.Create)
+            device.GET("/lamp/latest", cfg.LampHandler.GetLatest)
+            device.GET("/lamp/history", cfg.LampHandler.GetAll)
 
-		// ==================== DEVICE CONTROL ENDPOINTS ====================
-		control := api.Group("/control")
-		{
-			// Universal control endpoint
-			control.POST("/device", cfg.DeviceControlHandler.Control)
+            // Curtain Status
+            device.POST("/curtain", cfg.CurtainHandler.Create)
+            device.GET("/curtain/latest", cfg.CurtainHandler.GetLatest)
+        }
 
-			// Specific device controls
-			control.POST("/door", cfg.DeviceControlHandler.ControlDoor)
-			control.POST("/lamp", cfg.DeviceControlHandler.ControlLamp)
-			control.POST("/curtain", cfg.DeviceControlHandler.ControlCurtain)
+        // ==================== DEVICE CONTROL ENDPOINTS ====================
+        control := api.Group("/control")
+        {
+            // Universal control endpoint
+            control.POST("/device", cfg.DeviceControlHandler.Control)
 
-			// Manual Buzzer Control
-			control.POST("/buzzer", cfg.DeviceControlHandler.ControlBuzzer)
-		}
+            // Specific device controls
+            control.POST("/door", cfg.DeviceControlHandler.ControlDoor)
+            control.POST("/lamp", cfg.DeviceControlHandler.ControlLamp)
+            control.POST("/curtain", cfg.DeviceControlHandler.ControlCurtain)
 
-		// ==================== USER ENDPOINTS ====================
-		user := api.Group("/user")
-		{
-			// Register & Login dipisah ke group /auth di bawah
-			user.GET("/", cfg.UserHandler.GetAll)
-			user.GET("/:id", cfg.UserHandler.GetByID)
-			user.DELETE("/:id", cfg.UserHandler.Delete)
-		}
+            // Manual Buzzer Control
+            control.POST("/buzzer", cfg.DeviceControlHandler.ControlBuzzer)
+        }
 
-		// ==================== AUTH ENDPOINTS ====================
-		auth := api.Group("/auth")
-		{
-			auth.POST("/register", cfg.AuthHandler.Register)
-			auth.POST("/login", cfg.AuthHandler.Login)
-		}
+        // ==================== USER ENDPOINTS ====================
+        user := api.Group("/user")
+        {
+            user.GET("/", cfg.UserHandler.GetAll)
+            user.GET("/:id", cfg.UserHandler.GetByID)
+            user.DELETE("/:id", cfg.UserHandler.Delete)
+        }
 
-		// ==================== ADMIN ENDPOINTS ====================
-		admin := api.Group("/admin")
-		{
-			// User Approval
-			admin.GET("/users/pending", cfg.AdminHandler.GetPendingUsers)
-			admin.POST("/users/:id/approve", cfg.AdminHandler.Approve) // ⭐ Ubah ke AdminHandler
-			admin.POST("/users/:id/reject", cfg.AdminHandler.Reject)   // ⭐ Ubah ke AdminHandler
+        // ==================== AUTH ENDPOINTS ====================
+        auth := api.Group("/auth")
+        {
+            auth.POST("/register", cfg.AuthHandler.Register)
+            auth.POST("/login", cfg.AuthHandler.Login)
+        }
 
-			// Universal PIN Management
-			admin.GET("/pin", cfg.AdminHandler.GetUniversalPin)
-			admin.POST("/pin", cfg.AdminHandler.SetUniversalPin)
-		}
-		// ==================== ACCESS LOG ENDPOINTS ====================
-		accessLog := api.Group("/access-log")
-		{
-			accessLog.POST("/", cfg.AccessLogHandler.Create)
-			accessLog.GET("/", cfg.AccessLogHandler.GetAll)
-			accessLog.GET("/user/:user_id", cfg.AccessLogHandler.GetByUserID)
-			accessLog.GET("/status/:status", cfg.AccessLogHandler.GetByStatus)
-		}
+        // ==================== ADMIN ENDPOINTS ====================
+        admin := api.Group("/admin")
+        {
+            // User Approval
+            admin.GET("/users/pending", cfg.AdminHandler.GetPendingUsers)
+            admin.POST("/users/:id/approve", cfg.AdminHandler.Approve)
+            admin.POST("/users/:id/reject", cfg.AdminHandler.Reject)
 
-		// ==================== NOTIFICATION ENDPOINTS ====================
-		notification := api.Group("/notification")
-		{
-			notification.POST("/", cfg.NotificationHandler.Create)
-			notification.GET("/", cfg.NotificationHandler.GetAll)
-			notification.GET("/type/:type", cfg.NotificationHandler.GetByType)
-		}
+            // Universal PIN Management
+            admin.GET("/pin", cfg.AdminHandler.GetUniversalPin)
+            admin.POST("/pin", cfg.AdminHandler.SetUniversalPin)
+        }
 
-		// ==================== FACE RECOGNITION ENDPOINTS ====================
-		face := api.Group("/face")
-		{
-			face.POST("/recognize", cfg.FaceHandler.RecognizeFace) // ESP32-CAM calls this
-			face.POST("/enroll", cfg.FaceHandler.EnrollFace)       // Enroll new face
-			face.POST("/reload", cfg.FaceHandler.ReloadFaces)      // Reload known faces
-			face.GET("/logs", cfg.FaceHandler.GetAccessLogs)       // Get access logs
-		}
+        // ==================== ACCESS LOG ENDPOINTS ====================
+        accessLog := api.Group("/access-log")
+        {
+            accessLog.POST("/", cfg.AccessLogHandler.Create)
+            accessLog.GET("/", cfg.AccessLogHandler.GetAll)
+            accessLog.GET("/user/:user_id", cfg.AccessLogHandler.GetByUserID)
+            accessLog.GET("/status/:status", cfg.AccessLogHandler.GetByStatus)
+        }
 
-		// ==================== WEBSOCKET ENDPOINT ====================
-		api.GET("/ws", cfg.WsHub.HandleWebSocket)
-	}
+        // ==================== NOTIFICATION ENDPOINTS ====================
+        notification := api.Group("/notification")
+        {
+            notification.POST("/", cfg.NotificationHandler.Create)
+            notification.GET("/", cfg.NotificationHandler.GetAll)
+            notification.GET("/type/:type", cfg.NotificationHandler.GetByType)
+        }
 
-	return r
+        // ==================== FACE RECOGNITION ENDPOINTS ====================
+        face := api.Group("/face")
+        {
+            face.POST("/recognize", cfg.FaceHandler.RecognizeFace)
+            face.POST("/enroll", cfg.FaceHandler.EnrollFace)
+            face.POST("/reload", cfg.FaceHandler.ReloadFaces)
+            face.GET("/logs", cfg.FaceHandler.GetAccessLogs)
+        }
+
+        // ==================== WEBSOCKET ENDPOINT ====================
+        api.GET("/ws", cfg.WsHub.HandleWebSocket)
+    }
+
+    return r
 }
