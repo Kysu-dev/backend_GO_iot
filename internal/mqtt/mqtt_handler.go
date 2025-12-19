@@ -23,17 +23,23 @@ type MQTTHandler struct {
 	pinSvc     service.PinService
 	wsHub      *websocket.Hub
 
+	// Batch sensor persistence
+	batchInterval time.Duration
+	sensorCache   sensorCache
+
 	// Buzzer state tracking
 	lastBuzzerState string
 	buzzerMutex     sync.Mutex
 
 	// Lamp state tracking
 	lastLampState      string
+	lastLampMode       string
 	lampMutex          sync.RWMutex
 	lastLampChangeTime time.Time
 
 	// Curtain state tracking
 	lastCurtainState      string
+	lastCurtainMode       string
 	curtainMutex          sync.RWMutex
 	lastCurtainChangeTime time.Time
 
@@ -55,7 +61,7 @@ func NewMQTTHandler(
 	pin service.PinService,
 	hub *websocket.Hub,
 ) *MQTTHandler {
-	return &MQTTHandler{
+	handler := &MQTTHandler{
 		client:             client,
 		gasSvc:             g,
 		tempSvc:            t,
@@ -66,12 +72,29 @@ func NewMQTTHandler(
 		curtainSvc:         curtain,
 		pinSvc:             pin,
 		wsHub:              hub,
+		batchInterval:      defaultSensorBatchInterval,
 		lastBuzzerState:    "off",
 		lastLampState:      "off",
+		lastLampMode:       "auto",
 		lastLampChangeTime: time.Now(),
+		lastCurtainState:   "closed",
+		lastCurtainMode:    "auto",
 		gasReadings:        make([]int, 0, 5), // ⭐ Buffer 5 readings
 		maxGasReadings:     5,
 	}
+
+	handler.startSensorBatcher()
+
+	return handler
+}
+
+func (h *MQTTHandler) startSensorBatcher() {
+	ticker := time.NewTicker(h.batchInterval)
+	go func() {
+		for range ticker.C {
+			h.flushSensorCache()
+		}
+	}()
 }
 
 func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
@@ -98,7 +121,55 @@ func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
 			log.Printf("✅ [MQTT] Subscribed: %s", topic)
 		}
 	}
-	log.Println("✅ [MQTT] All topics subscribed and ready")
+}
+
+func (h *MQTTHandler) flushSensorCache() {
+	h.sensorCache.mu.Lock()
+	temperature := h.sensorCache.temperature
+	temperaturePending := h.sensorCache.temperaturePending
+	h.sensorCache.temperaturePending = false
+	humidity := h.sensorCache.humidity
+	humidityPending := h.sensorCache.humidityPending
+	h.sensorCache.humidityPending = false
+	light := h.sensorCache.light
+	lightPending := h.sensorCache.lightPending
+	h.sensorCache.lightPending = false
+	gas := h.sensorCache.gas
+	gasPending := h.sensorCache.gasPending
+	h.sensorCache.gasPending = false
+	h.sensorCache.mu.Unlock()
+
+	if temperaturePending {
+		if err := h.tempSvc.ProcessTemp(temperature); err != nil {
+			log.Printf("[ERROR] Batch save temperature failed: %v", err)
+		} else {
+			log.Printf("[DEBUG] Batch saved temperature: %.2f", temperature)
+		}
+	}
+
+	if humidityPending {
+		if err := h.humidSvc.ProcessHumid(humidity); err != nil {
+			log.Printf("[ERROR] Batch save humidity failed: %v", err)
+		} else {
+			log.Printf("[DEBUG] Batch saved humidity: %.2f", humidity)
+		}
+	}
+
+	if lightPending {
+		if err := h.lightSvc.ProcessLight(light); err != nil {
+			log.Printf("[ERROR] Batch save light failed: %v", err)
+		} else {
+			log.Printf("[DEBUG] Batch saved light: %d Lux", light)
+		}
+	}
+
+	if gasPending {
+		if _, err := h.gasSvc.ProcessGas(gas); err != nil {
+			log.Printf("[ERROR] Batch save gas failed: %v", err)
+		} else {
+			log.Printf("[DEBUG] Batch saved gas: %d PPM", gas)
+		}
+	}
 }
 
 // ==================== CONTROL FUNCTIONS (OUTPUT) ====================
@@ -195,112 +266,8 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 
 	log.Printf("💡 Light: %d Lux", data.Lux)
 
-	// Save to database
-	go func() {
-		if err := h.lightSvc.ProcessLight(data.Lux); err != nil {
-			log.Printf("[ERROR] DB Save Light Failed: %v", err)
-		}
-	}()
-
-	// Auto lamp control logic
-	go func() {
-		h.lampMutex.Lock()
-		defer h.lampMutex.Unlock()
-
-		currentStatus := h.lastLampState
-
-		// Get current mode from database
-		lastLamp, err := h.lampSvc.GetLatest()
-		currentMode := "auto"
-		if err == nil {
-			currentMode = lastLamp.Mode
-			if lastLamp.Status != currentStatus {
-				currentStatus = lastLamp.Status
-				h.lastLampState = currentStatus
-			}
-		}
-
-		// Skip if manual mode
-		if currentMode == "manual" {
-			return
-		}
-
-		const (
-			luxThreshold  = 500
-			debounceDelay = 5 * time.Second
-		)
-
-		// Debouncing
-		if time.Since(h.lastLampChangeTime) < debounceDelay {
-			return
-		}
-
-		// Turn ON if dark (Lux < 500)
-		if data.Lux < luxThreshold && currentStatus == "off" {
-			h.PublishLampControl("on")
-			h.lampSvc.ProcessLamp("on", "auto")
-			h.lastLampState = "on"
-			h.lastLampChangeTime = time.Now()
-		}
-
-		// Turn OFF if bright (Lux >= 500)
-		if data.Lux >= luxThreshold && currentStatus == "on" {
-			h.PublishLampControl("off")
-			h.lampSvc.ProcessLamp("off", "auto")
-			h.lastLampState = "off"
-			h.lastLampChangeTime = time.Now()
-		}
-	}()
-
-	// Auto curtain control logic
-	go func() {
-		h.curtainMutex.Lock()
-		defer h.curtainMutex.Unlock()
-
-		currentStatus := h.lastCurtainState
-
-		// Get current mode from database
-		lastCurtain, err := h.curtainSvc.GetLatest()
-		currentMode := "auto"
-		if err == nil {
-			currentMode = lastCurtain.Mode
-			if lastCurtain.Status != currentStatus {
-				currentStatus = lastCurtain.Status
-				h.lastCurtainState = currentStatus
-			}
-		}
-
-		// Skip if manual mode
-		if currentMode == "manual" {
-			return
-		}
-
-		const (
-			luxThreshold  = 500
-			debounceDelay = 5 * time.Second
-		)
-
-		// Debouncing
-		if time.Since(h.lastCurtainChangeTime) < debounceDelay {
-			return
-		}
-
-		// CLOSE curtain if dark (Lux < 500) - Lamp is ON, keep gorden closed
-		if data.Lux < luxThreshold && currentStatus == "open" {
-			h.PublishCurtainControl("close")
-			h.curtainSvc.ProcessCurtain("closed", "auto")
-			h.lastCurtainState = "closed"
-			h.lastCurtainChangeTime = time.Now()
-		}
-
-		// OPEN curtain if bright (Lux >= 500) - Use natural light
-		if data.Lux >= luxThreshold && currentStatus == "closed" {
-			h.PublishCurtainControl("open")
-			h.curtainSvc.ProcessCurtain("open", "auto")
-			h.lastCurtainState = "open"
-			h.lastCurtainChangeTime = time.Now()
-		}
-	}()
+	// Cache for batch persistence
+	h.setLatestLight(data.Lux)
 
 	h.wsHub.BroadcastData(msg.Payload())
 }
@@ -316,65 +283,28 @@ func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	log.Printf("💨 Gas: %d PPM (Raw)", data.PPM)
+	log.Printf("💨 Gas: %d PPM (raw)", data.PPM)
 
-	go func() {
-		// Check if lamp just changed (stabilization period)
-		h.lampMutex.RLock()
-		timeSinceLampChange := time.Since(h.lastLampChangeTime)
-		h.lampMutex.RUnlock()
+	status := "normal"
+	if data.PPM > 200 {
+		status = "warning"
+	}
+	if data.PPM > 500 {
+		status = "danger"
+	}
 
-		// Skip readings during lamp stabilization (10 seconds - same as ESP32 GAS_SKIP_DURATION)
-		if timeSinceLampChange < 10*time.Second {
-			log.Printf("⏭️  Gas: SKIPPED (Lamp stabilization: %.1fs remaining)", 10-(timeSinceLampChange.Seconds()))
-			return
-		}
-
-		// ⭐ MOVING AVERAGE FILTER (reduces EMI noise)
-		h.gasReadingMutex.Lock()
-		h.gasReadings = append(h.gasReadings, data.PPM)
-		if len(h.gasReadings) > h.maxGasReadings {
-			h.gasReadings = h.gasReadings[1:] // Remove oldest reading
-		}
-
-		// Calculate average
-		sum := 0
-		for _, val := range h.gasReadings {
-			sum += val
-		}
-		avgPPM := sum / len(h.gasReadings)
-		h.gasReadingMutex.Unlock()
-
-		// Save AVERAGED value to database (smoother data)
-		_, err := h.gasSvc.ProcessGas(avgPPM)
-		if err != nil {
-			log.Printf("[ERROR] DB Save Gas Failed: %v", err)
-			return
-		}
-
-		log.Printf("💨 Gas: %d PPM (Avg from %d readings)", avgPPM, len(h.gasReadings))
-
-		// ⭐ Hysteresis threshold for buzzer (using averaged PPM)
-		const (
-			thresholdDanger = 800 // Turn buzzer ON
-			thresholdSafe   = 500 // Turn buzzer OFF (prevent flapping)
-		)
-
-		h.buzzerMutex.Lock()
-		defer h.buzzerMutex.Unlock()
-
-		// Turn ON buzzer if gas high
-		if avgPPM >= thresholdDanger && h.lastBuzzerState != "on" {
-			h.PublishBuzzerControl("on")
-			h.lastBuzzerState = "on"
-		}
-
-		// Turn OFF buzzer if gas low
-		if avgPPM < thresholdSafe && h.lastBuzzerState == "on" {
-			h.PublishBuzzerControl("off")
-			h.lastBuzzerState = "off"
-		}
-	}()
+	// Danger langsung disimpan; lainnya dibatch (disimpan saat flush 1 menit)
+	if status == "danger" {
+		go func(ppm int) {
+			if savedStatus, err := h.gasSvc.ProcessGas(ppm); err != nil {
+				log.Printf("[ERROR] Gas save failed: %v", err)
+			} else {
+				log.Printf("[DEBUG] Gas saved immediate: %d PPM (status=%s)", ppm, savedStatus)
+			}
+		}(data.PPM)
+	} else {
+		h.setLatestGas(data.PPM)
+	}
 
 	h.wsHub.BroadcastData(msg.Payload())
 }
@@ -392,7 +322,7 @@ func (h *MQTTHandler) handleTemperature(client mqtt.Client, msg mqtt.Message) {
 	}
 
 	log.Printf("✅ [MQTT] 🌡️  Temperature: %.1f°C", data.Temperature)
-	go h.tempSvc.ProcessTemp(data.Temperature)
+	h.setLatestTemperature(data.Temperature)
 	h.wsHub.BroadcastData(msg.Payload())
 }
 
@@ -407,7 +337,7 @@ func (h *MQTTHandler) handleHumidity(client mqtt.Client, msg mqtt.Message) {
 	}
 
 	log.Printf("💧 Humidity: %.1f%%", data.Humidity)
-	go h.humidSvc.ProcessHumid(data.Humidity)
+	h.setLatestHumidity(data.Humidity)
 	h.wsHub.BroadcastData(msg.Payload())
 }
 
@@ -430,12 +360,19 @@ func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
 		previousMode = lastLamp.Mode
 	}
 
+	// Snapshot old state before updating
+	h.lampMutex.RLock()
+	prevStatus := h.lastLampState
+	h.lampMutex.RUnlock()
+
 	// Check if mode changed
 	modeChanged := previousMode != req.Mode
+	statusChanged := prevStatus != req.Status
 
 	// Update local state
 	h.lampMutex.Lock()
 	h.lastLampState = req.Status
+	h.lastLampMode = req.Mode
 	h.lastLampChangeTime = time.Now()
 	h.lampMutex.Unlock()
 
@@ -458,49 +395,10 @@ func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
 		log.Printf("💨 Gas: FORCED 0 PPM (Lamp ON - stabilization period)")
 	}
 
-	// Only save to database if mode changed OR status changed in manual mode
-	if modeChanged || req.Mode == "manual" {
+	// Save to database when there is any change (status or mode)
+	if modeChanged || statusChanged {
 		go h.lampSvc.ProcessLamp(req.Status, req.Mode)
-		if modeChanged {
-			log.Printf("💡 Lamp: %s (mode: %s)", req.Status, req.Mode)
-		}
-	}
-
-	// Trigger auto control immediately if switched to auto mode
-	if modeChanged && req.Mode == "auto" {
-		go func() {
-			time.Sleep(500 * time.Millisecond) // Small delay to ensure state is updated
-
-			// Get latest light sensor value
-			latestLight, err := h.lightSvc.GetLatest()
-			if err != nil {
-				log.Printf("[ERROR] Failed to get latest light value for auto mode: %v", err)
-				return
-			}
-
-			const luxThreshold = 500
-
-			h.lampMutex.Lock()
-			currentStatus := h.lastLampState
-			h.lampMutex.Unlock()
-
-			// Apply auto logic based on current lux
-			if latestLight.Lux < luxThreshold && currentStatus == "off" {
-				h.PublishLampControl("on")
-				h.lampSvc.ProcessLamp("on", "auto")
-				h.lampMutex.Lock()
-				h.lastLampState = "on"
-				h.lastLampChangeTime = time.Now()
-				h.lampMutex.Unlock()
-			} else if latestLight.Lux >= luxThreshold && currentStatus == "on" {
-				h.PublishLampControl("off")
-				h.lampSvc.ProcessLamp("off", "auto")
-				h.lampMutex.Lock()
-				h.lastLampState = "off"
-				h.lastLampChangeTime = time.Now()
-				h.lampMutex.Unlock()
-			}
-		}()
+		log.Printf("💡 Lamp: %s (mode: %s)", req.Status, req.Mode)
 	}
 
 	wsData := map[string]interface{}{
@@ -558,10 +456,17 @@ func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) 
 		return
 	}
 
-	// Get previous status to detect changes
-	lastCurtain, _ := h.curtainSvc.GetLatest()
-	statusChanged := lastCurtain == nil || lastCurtain.Status != req.Status
-	modeChanged := lastCurtain == nil || lastCurtain.Mode != req.Mode
+	// Update in-memory state and detect changes without DB dependency
+	h.curtainMutex.Lock()
+	prevStatus := h.lastCurtainState
+	prevMode := h.lastCurtainMode
+	h.lastCurtainState = req.Status
+	h.lastCurtainMode = req.Mode
+	h.lastCurtainChangeTime = time.Now()
+	h.curtainMutex.Unlock()
+
+	statusChanged := prevStatus != req.Status
+	modeChanged := prevMode != req.Mode
 
 	go h.curtainSvc.ProcessCurtain(req.Status, req.Mode)
 
