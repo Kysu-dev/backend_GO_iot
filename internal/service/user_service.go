@@ -346,7 +346,7 @@ func (s *userService) ReEnrollFace(id uint, imageBase64 string) (*models.User, e
 
 	// 1. Delete old face encoding if exists
 	if user.FaceEncodingPath != "" {
-		pythonServiceURL := "http://localhost:5000"
+		pythonServiceURL := "http://192.168.1.48:5001"
 		deleteURL := fmt.Sprintf("%s/faces/%d", pythonServiceURL, id)
 
 		req, _ := http.NewRequest("DELETE", deleteURL, nil)
@@ -363,7 +363,7 @@ func (s *userService) ReEnrollFace(id uint, imageBase64 string) (*models.User, e
 	}
 
 	// 2. Enroll new face via Python service
-	enrollURL := "http://localhost:5000/enroll"
+	enrollURL := "http://192.168.1.48:5001/enroll"
 	payload := map[string]interface{}{
 		"user_id": id,
 		"name":    user.Name,
@@ -414,7 +414,7 @@ func (s *userService) Delete(id uint) error {
 
 	// If user has face encoding, delete it from Python service first
 	if user.FaceEncodingPath != "" {
-		pythonServiceURL := "http://localhost:5000"
+		pythonServiceURL := "http://192.168.1.48:5001"
 		deleteURL := fmt.Sprintf("%s/faces/%d", pythonServiceURL, id)
 
 		req, err := http.NewRequest("DELETE", deleteURL, nil)

@@ -56,7 +56,7 @@ func main() {
 	pinSvc := service.NewPinService(pinRepo)
 
 	// Server Python Face Rec
-	authSvc := service.NewAuthService("http://10.124.88.112:5001", "jwt-secret-key")
+	authSvc := service.NewAuthService("http://192.168.1.48:5001", "jwt-secret-key")
 
 	// =========================================================================
 	// 5. SETUP MQTT CLIENT (OPTIMALISASI HIVEMQ)
