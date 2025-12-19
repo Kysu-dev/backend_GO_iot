@@ -8,6 +8,7 @@ import (
 	"smarthome-backend/internal/repository"
 
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 type UserService interface {
@@ -22,10 +23,39 @@ type UserService interface {
 	UpdateUser(id uint, req models.UpdateUserRequest) (*models.User, error)
 	UpdateFacePath(userID uint, facePath string) error
 	Delete(id uint) error
+	CreateAdmin(req models.UserRequest) (*models.User, error)
+	GetAdmins() ([]models.User, error)
+	GetAdminByID(id uint) (*models.User, error)
+	UpdateAdmin(id uint, req models.UpdateUserRequest) (*models.User, error)
+	DeleteAdmin(id uint) error
 }
 
 type userService struct {
 	repo repository.UserRepository
+}
+
+// normalizeRole maps external labels to DB enum values.
+// Accepts "user" as alias for "member" to fit the enum.
+func normalizeRole(role string) string {
+	switch role {
+	case "user":
+		return "member"
+	case "member", "admin":
+		return role
+	default:
+		return role
+	}
+}
+
+func normalizeStatus(status string) (string, error) {
+	switch status {
+	case "pending", "active", "suspended":
+		return status, nil
+	case "rejected":
+		return "", errors.New("status 'rejected' is not supported; use pending/active/suspended")
+	default:
+		return "", errors.New("invalid status")
+	}
 }
 
 func NewUserService(r repository.UserRepository) UserService {
@@ -45,8 +75,7 @@ func (s *userService) Register(req models.UserRequest) (*models.User, error) {
 		return nil, err
 	}
 
-	// Set default role if not provided
-	role := req.Role
+	role := normalizeRole(req.Role)
 	if role == "" {
 		role = "member"
 	}
@@ -65,6 +94,106 @@ func (s *userService) Register(req models.UserRequest) (*models.User, error) {
 	}
 
 	return user, nil
+}
+
+// Admin CRUD helpers
+func (s *userService) CreateAdmin(req models.UserRequest) (*models.User, error) {
+	// Reuse validation: email uniqueness
+	if existing, _ := s.repo.FindByEmail(req.Email); existing != nil && existing.UserID > 0 {
+		return nil, errors.New("email already registered")
+	}
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
+	}
+
+	admin := &models.User{
+		Name:     req.Name,
+		Email:    req.Email,
+		Password: string(hashedPassword),
+		Role:     "admin",
+		Status:   "active",
+	}
+
+	if err := s.repo.Create(admin); err != nil {
+		return nil, err
+	}
+
+	return admin, nil
+}
+
+func (s *userService) GetAdmins() ([]models.User, error) {
+	all, err := s.repo.GetAll()
+	if err != nil {
+		return nil, err
+	}
+	admins := make([]models.User, 0)
+	for _, u := range all {
+		if u.Role == "admin" {
+			admins = append(admins, u)
+		}
+	}
+	return admins, nil
+}
+
+func (s *userService) GetAdminByID(id uint) (*models.User, error) {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, err
+	}
+	if user.Role != "admin" {
+		return nil, errors.New("user is not admin")
+	}
+	return user, nil
+}
+
+func (s *userService) UpdateAdmin(id uint, req models.UpdateUserRequest) (*models.User, error) {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return nil, errors.New("user not found")
+	}
+	if user.Role != "admin" {
+		return nil, errors.New("user is not admin")
+	}
+
+	// If email changes, ensure unique
+	if user.Email != req.Email {
+		existing, err := s.repo.FindByEmail(req.Email)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, err
+			}
+		} else if existing != nil && existing.UserID != id {
+			return nil, errors.New("email already in use")
+		}
+	}
+
+	normalizedStatus, err := normalizeStatus(req.Status)
+	if err != nil {
+		return nil, err
+	}
+
+	user.Name = req.Name
+	user.Email = req.Email
+	user.Role = "admin" // force admin
+	user.Status = normalizedStatus
+
+	if err := s.repo.Update(user); err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func (s *userService) DeleteAdmin(id uint) error {
+	user, err := s.repo.FindByID(id)
+	if err != nil {
+		return err
+	}
+	if user.Role != "admin" {
+		return errors.New("user is not admin")
+	}
+	return s.repo.Delete(id)
 }
 
 func (s *userService) Login(req models.LoginRequest) (*models.User, error) {
@@ -109,17 +238,31 @@ func (s *userService) UpdateUser(id uint, req models.UpdateUserRequest) (*models
 
 	// Check if email is being changed and already exists
 	if user.Email != req.Email {
-		existing, _ := s.repo.FindByEmail(req.Email)
-		if existing != nil && existing.UserID != id {
+		existing, err := s.repo.FindByEmail(req.Email)
+		if err != nil {
+			if !errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, err
+			}
+		} else if existing != nil && existing.UserID != id {
 			return nil, errors.New("email already in use")
 		}
+	}
+
+	normalizedRole := normalizeRole(req.Role)
+	if normalizedRole != "admin" && normalizedRole != "member" {
+		return nil, errors.New("invalid role")
+	}
+
+	normalizedStatus, err := normalizeStatus(req.Status)
+	if err != nil {
+		return nil, err
 	}
 
 	// Update fields (face_encoding_path is NOT touched)
 	user.Name = req.Name
 	user.Email = req.Email
-	user.Role = req.Role
-	user.Status = req.Status
+	user.Role = normalizedRole
+	user.Status = normalizedStatus
 
 	err = s.repo.Update(user)
 	if err != nil {
