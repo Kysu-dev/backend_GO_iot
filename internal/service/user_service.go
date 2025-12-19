@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"smarthome-backend/database/models"
 	"smarthome-backend/internal/repository"
 
@@ -346,7 +347,10 @@ func (s *userService) ReEnrollFace(id uint, imageBase64 string) (*models.User, e
 
 	// 1. Delete old face encoding if exists
 	if user.FaceEncodingPath != "" {
-		pythonServiceURL := "http://localhost:5000"
+		pythonServiceURL := os.Getenv("PYTHON_SERVICE_URL")
+		if pythonServiceURL == "" {
+			pythonServiceURL = "http://localhost:5000"
+		}
 		deleteURL := fmt.Sprintf("%s/faces/%d", pythonServiceURL, id)
 
 		req, _ := http.NewRequest("DELETE", deleteURL, nil)
@@ -363,7 +367,11 @@ func (s *userService) ReEnrollFace(id uint, imageBase64 string) (*models.User, e
 	}
 
 	// 2. Enroll new face via Python service
-	enrollURL := "http://localhost:5000/enroll"
+	pythonServiceURL := os.Getenv("PYTHON_SERVICE_URL")
+	if pythonServiceURL == "" {
+		pythonServiceURL = "http://localhost:5000"
+	}
+	enrollURL := fmt.Sprintf("%s/enroll-base64", pythonServiceURL)
 	payload := map[string]interface{}{
 		"user_id": id,
 		"name":    user.Name,
@@ -390,10 +398,18 @@ func (s *userService) ReEnrollFace(id uint, imageBase64 string) (*models.User, e
 	}
 
 	// 3. Update face_encoding_path in database
-	newPath, ok := result["face_encoding_path"].(string)
+	// Python service returns 'file' field, not 'face_encoding_path'
+	filename, ok := result["file"].(string)
 	if !ok {
+		// Try 'message' field as fallback
+		if msg, ok := result["message"].(string); ok {
+			return nil, errors.New(msg)
+		}
 		return nil, errors.New("invalid response from face service")
 	}
+
+	// Build full path: known_faces/filename.pkl
+	newPath := "known_faces/" + filename
 
 	err = s.repo.UpdateFacePath(id, newPath)
 	if err != nil {
@@ -414,7 +430,10 @@ func (s *userService) Delete(id uint) error {
 
 	// If user has face encoding, delete it from Python service first
 	if user.FaceEncodingPath != "" {
-		pythonServiceURL := "http://localhost:5000"
+		pythonServiceURL := os.Getenv("PYTHON_SERVICE_URL")
+		if pythonServiceURL == "" {
+			pythonServiceURL = "http://localhost:5000"
+		}
 		deleteURL := fmt.Sprintf("%s/faces/%d", pythonServiceURL, id)
 
 		req, err := http.NewRequest("DELETE", deleteURL, nil)
