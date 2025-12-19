@@ -85,6 +85,28 @@ func (h *UserHandler) GetByID(c *gin.Context) {
 	c.JSON(200, gin.H{"success": true, "data": user})
 }
 
+func (h *UserHandler) Update(c *gin.Context) {
+	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
+	if err != nil {
+		c.JSON(400, gin.H{"success": false, "error": "Invalid user ID"})
+		return
+	}
+
+	var req models.UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	user, err := h.svc.UpdateUser(uint(id), req)
+	if err != nil {
+		c.JSON(500, gin.H{"success": false, "error": err.Error()})
+		return
+	}
+
+	c.JSON(200, gin.H{"success": true, "message": "User updated successfully", "data": user})
+}
+
 func (h *UserHandler) GetPending(c *gin.Context) {
 	users, err := h.svc.GetPending()
 	if err != nil {

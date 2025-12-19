@@ -30,6 +30,13 @@ type LoginRequest struct {
 	Password string `json:"password" binding:"required"`
 }
 
+type UpdateUserRequest struct {
+	Name   string `json:"name" binding:"required"`
+	Email  string `json:"email" binding:"required,email"`
+	Role   string `json:"role" binding:"required,oneof=admin user"`
+	Status string `json:"status" binding:"required,oneof=active pending rejected"`
+}
+
 // LoginResponse after successful authentication
 type LoginResponse struct {
 	Token string `json:"token"`
