@@ -11,10 +11,11 @@ import (
 
 type AppConfig struct {
 	// Sensor Handlers
-	GasHandler   *handler.GasHandler
-	TempHandler  *handler.TempHandler
-	HumidHandler *handler.HumidHandler
-	LightHandler *handler.LightHandler
+	GasHandler             *handler.GasHandler
+	TempHandler            *handler.TempHandler
+	HumidHandler           *handler.HumidHandler
+	LightHandler           *handler.LightHandler
+	SensorAnalyticsHandler *handler.SensorAnalyticsHandler
 
 	// Device Handlers
 	DoorHandler    *handler.DoorHandler
@@ -127,6 +128,11 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			// Light Sensor
 			sensor.POST("/light", cfg.LightHandler.Create)
 			sensor.GET("/light", cfg.LightHandler.GetAll)
+
+			// Analytics Endpoints
+			sensor.GET("/stats", cfg.SensorAnalyticsHandler.GetStatistics)
+			sensor.GET("/data", cfg.SensorAnalyticsHandler.GetPaginatedData)
+			sensor.GET("/hourly", cfg.SensorAnalyticsHandler.GetHourlyData)
 		}
 
 		// ==================== DEVICE STATUS ENDPOINTS ====================
