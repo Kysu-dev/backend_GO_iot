@@ -184,7 +184,7 @@ func (s *sensorAnalyticsService) GetHourlyData(timeRange string) ([]models.Hourl
     start, end := parseTimeRange(timeRange)
     startUTC, endUTC := start.UTC(), end.UTC()
 
-    var hourlyData []models.HourlyData
+    hourlyData := make([]models.HourlyData, 0)
 
     current := time.Date(startUTC.Year(), startUTC.Month(), startUTC.Day(), startUTC.Hour(), 0, 0, 0, time.UTC)
     for current.Before(endUTC) {
