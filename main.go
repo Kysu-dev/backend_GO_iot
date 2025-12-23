@@ -54,6 +54,7 @@ func main() {
 	accessLogSvc := service.NewAccessLogService(accessLogRepo)
 	notifSvc := service.NewNotificationService(notifRepo)
 	pinSvc := service.NewPinService(pinRepo)
+	sensorAnalyticsSvc := service.NewSensorAnalyticsService(db)
 
 	// Server Python Face Rec
 	authSvc := service.NewAuthService("http://192.168.1.48:5001", "jwt-secret-key")
@@ -133,24 +134,26 @@ func main() {
 	)
 
 	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient)
+	sensorAnalyticsHandler := handler.NewSensorAnalyticsHandler(sensorAnalyticsSvc)
 
 	// 9. Router Configuration
 	routerCfg := router.AppConfig{
-		GasHandler:           gasHandler,
-		TempHandler:          tempHandler,
-		HumidHandler:         humidHandler,
-		LightHandler:         lightHandler,
-		DoorHandler:          doorHandler,
-		LampHandler:          lampHandler,
-		CurtainHandler:       curtainHandler,
-		UserHandler:          userHandler,
-		AccessLogHandler:     accessLogHandler,
-		NotificationHandler:  notifHandler,
-		AuthHandler:          authHandler,
-		AdminHandler:         adminHandler,
-		DeviceControlHandler: deviceControlHandler,
-		FaceHandler:          faceHandler,
-		WsHub:                wsHub,
+		GasHandler:             gasHandler,
+		TempHandler:            tempHandler,
+		HumidHandler:           humidHandler,
+		LightHandler:           lightHandler,
+		SensorAnalyticsHandler: sensorAnalyticsHandler,
+		DoorHandler:            doorHandler,
+		LampHandler:            lampHandler,
+		CurtainHandler:         curtainHandler,
+		UserHandler:            userHandler,
+		AccessLogHandler:       accessLogHandler,
+		NotificationHandler:    notifHandler,
+		AuthHandler:            authHandler,
+		AdminHandler:           adminHandler,
+		DeviceControlHandler:   deviceControlHandler,
+		FaceHandler:            faceHandler,
+		WsHub:                  wsHub,
 	}
 	r := router.InitRouter(routerCfg)
 
