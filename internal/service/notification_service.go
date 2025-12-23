@@ -29,11 +29,11 @@ func (s *notificationService) Create(req models.NotificationRequest) error {
 
 	err := s.repo.Create(notif)
 	if err != nil {
-		log.Printf("❌ Error creating notification: %v", err)
+		log.Printf("Error creating notification: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Notification created: %s (%s)", req.Title, req.Type)
+	log.Printf("Notification created: %s (%s)", req.Title, req.Type)
 	return nil
 }
 

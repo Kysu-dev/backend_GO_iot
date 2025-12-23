@@ -11,15 +11,15 @@ import (
 )
 
 type Config struct {
-	DBHost     string
-	DBPort     string
-	DBUser     string
-	DBPassword string
-	DBName     string
-	ServerPort string
-	MQTTBroker string
+	DBHost       string
+	DBPort       string
+	DBUser       string
+	DBPassword   string
+	DBName       string
+	ServerPort   string
+	MQTTBroker   string
 	MQTTClientID string
-	JWTSecret  string
+	JWTSecret    string
 }
 
 func LoadConfig() *Config {
@@ -29,15 +29,15 @@ func LoadConfig() *Config {
 	}
 
 	return &Config{
-		DBHost:     getEnv("DB_HOST", "127.0.0.1"),
-		DBPort:     getEnv("DB_PORT", "3306"),
-		DBUser:     getEnv("DB_USER", "root"),
-		DBPassword: getEnv("DB_PASSWORD", ""),
-		DBName:     getEnv("DB_NAME", "smart_home_iot"),
-		ServerPort: getEnv("PORT", "8080"),
-		MQTTBroker: getEnv("MQTT_BROKER", "tcp://broker.hivemq.com:1883"),
-		MQTTClientID: getEnv("MQTT_CLIENT_ID", "smarthome-backend"), 
-		JWTSecret:  getEnv("JWT_SECRET", "your-secret-key"),
+		DBHost:       getEnv("DB_HOST", "127.0.0.1"),
+		DBPort:       getEnv("DB_PORT", "3306"),
+		DBUser:       getEnv("DB_USER", "root"),
+		DBPassword:   getEnv("DB_PASSWORD", ""),
+		DBName:       getEnv("DB_NAME", "smart_home_iot"),
+		ServerPort:   getEnv("PORT", "8080"),
+		MQTTBroker:   getEnv("MQTT_BROKER", "tcp://broker.hivemq.com:1883"),
+		MQTTClientID: getEnv("MQTT_CLIENT_ID", "smarthome-backend"),
+		JWTSecret:    getEnv("JWT_SECRET", "your-secret-key"),
 	}
 }
 
@@ -61,10 +61,10 @@ func InitDB() *gorm.DB {
 
 	db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
 	if err != nil {
-		log.Fatal("❌ Gagal koneksi Database:", err)
+		log.Fatal("Failed to connect to database:", err)
 	}
 
-	log.Println("✅ Database Connected!")
+	log.Println("Database Connected!")
 
 	return db
 }

@@ -34,18 +34,18 @@ func (s *lampService) ProcessLamp(status, mode string) error {
 		// Belum ada data, INSERT
 		err = s.repo.Create(lamp)
 		if err != nil {
-			log.Printf("❌ Error creating lamp status: %v", err)
+			log.Printf("Error creating lamp status: %v", err)
 			return err
 		}
-		log.Printf("✅ Lamp status created: %s (%s)", status, mode)
+		log.Printf("Lamp status created: %s (%s)", status, mode)
 	} else {
 		// Sudah ada data, UPDATE
 		err = s.repo.Update(lamp)
 		if err != nil {
-			log.Printf("❌ Error updating lamp status: %v", err)
+			log.Printf("Error updating lamp status: %v", err)
 			return err
 		}
-		log.Printf("✅ Lamp status updated: %s (%s)", status, mode)
+		log.Printf("Lamp status updated: %s (%s)", status, mode)
 	}
 
 	return nil

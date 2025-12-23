@@ -31,11 +31,11 @@ func (s *accessLogService) LogAccess(req models.AccessLogRequest) error {
 
 	err := s.repo.Create(accessLog)
 	if err != nil {
-		log.Printf("❌ Error logging access: %v", err)
+		log.Printf("Error logging access: %v", err)
 		return err
 	}
 
-	log.Printf("✅ Access logged: method=%s, status=%s", req.Method, req.Status)
+	log.Printf("Access logged: method=%s, status=%s", req.Method, req.Status)
 	return nil
 }
 

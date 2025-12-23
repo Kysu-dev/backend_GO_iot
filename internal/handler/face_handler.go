@@ -82,7 +82,7 @@ func (h *FaceHandler) RecognizeFace(c *gin.Context) {
 	})
 
 	if err != nil {
-		log.Printf("❌ Error calling Python service: %v", err)
+		log.Printf("Error calling Python service: %v", err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Success: false,
 			Error:   "Face recognition service unavailable: " + err.Error(),
@@ -98,11 +98,11 @@ func (h *FaceHandler) RecognizeFace(c *gin.Context) {
 	if pythonResp.Recognized {
 		userID = &pythonResp.UserID
 		accessStatus = "success"
-		log.Printf("✅ Face recognized: %s (user_id: %d, confidence: %.2f)",
+		log.Printf("Face recognized: %s (user_id: %d, confidence: %.2f)",
 			pythonResp.Name, pythonResp.UserID, pythonResp.Confidence)
 	} else {
 		accessStatus = "failed"
-		log.Printf("❌ Face not recognized")
+		log.Printf("Face not recognized")
 	}
 
 	// Save access log
@@ -170,7 +170,7 @@ func (h *FaceHandler) EnrollFace(c *gin.Context) {
 	})
 
 	if err != nil {
-		log.Printf("❌ Error calling Python service: %v", err)
+		log.Printf("Error calling Python service: %v", err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Success: false,
 			Error:   "Face enrollment service unavailable: " + err.Error(),
@@ -179,7 +179,7 @@ func (h *FaceHandler) EnrollFace(c *gin.Context) {
 	}
 
 	if !pythonResp.Success {
-		log.Printf("❌ Face enrollment failed: %s", pythonResp.Error)
+		log.Printf("Face enrollment failed: %s", pythonResp.Error)
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Success: false,
 			Error:   pythonResp.Error,
@@ -187,7 +187,7 @@ func (h *FaceHandler) EnrollFace(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Face enrolled successfully: %s (user_id: %d)", req.Name, req.UserID)
+	log.Printf("Face enrolled successfully: %s (user_id: %d)", req.Name, req.UserID)
 
 	c.JSON(http.StatusOK, models.Response{
 		Success: true,
@@ -207,7 +207,7 @@ func (h *FaceHandler) ReloadFaces(c *gin.Context) {
 	pythonResp, err := h.sendToPythonService("/reload", nil)
 
 	if err != nil {
-		log.Printf("❌ Error calling Python service: %v", err)
+		log.Printf("Error calling Python service: %v", err)
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Success: false,
 			Error:   "Face service unavailable: " + err.Error(),
@@ -215,7 +215,7 @@ func (h *FaceHandler) ReloadFaces(c *gin.Context) {
 		return
 	}
 
-	log.Printf("✅ Faces reloaded successfully")
+	log.Printf("Faces reloaded successfully")
 
 	c.JSON(http.StatusOK, models.Response{
 		Success: true,

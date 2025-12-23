@@ -1,4 +1,4 @@
-	package websocket
+package websocket
 
 import (
 	"log"
@@ -42,7 +42,7 @@ func (h *Hub) Run() {
 			h.mutex.Lock()
 			h.clients[client] = true
 			h.mutex.Unlock()
-			log.Printf("✅ Client connected. Total clients: %d", len(h.clients))
+			log.Printf("Client connected. Total clients: %d", len(h.clients))
 
 		case client := <-h.unregister:
 			h.mutex.Lock()
@@ -58,7 +58,7 @@ func (h *Hub) Run() {
 			for client := range h.clients {
 				err := client.WriteMessage(websocket.TextMessage, msg)
 				if err != nil {
-					log.Printf("❌ Error sending to client: %v", err)
+					log.Printf("Error sending to client: %v", err)
 					client.Close()
 					delete(h.clients, client)
 				}
@@ -77,7 +77,7 @@ func (h *Hub) BroadcastData(data []byte) {
 func (h *Hub) HandleWebSocket(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
-		log.Println("❌ WebSocket upgrade error:", err)
+		log.Println("WebSocket upgrade error:", err)
 		return
 	}
 
@@ -87,7 +87,7 @@ func (h *Hub) HandleWebSocket(c *gin.Context) {
 	// Start read pump (keep connection alive)
 	go h.readPump(conn)
 
-	log.Printf("✅ New WebSocket client connected from %s", c.ClientIP())
+	log.Printf("New WebSocket client connected from %s", c.ClientIP())
 }
 
 // Read pump untuk handle disconnect
@@ -124,7 +124,7 @@ func (h *Hub) StartPingTimer() {
 		for client := range h.clients {
 			err := client.WriteMessage(websocket.PingMessage, []byte{})
 			if err != nil {
-				log.Printf("❌ Ping failed: %v", err)
+				log.Printf("Ping failed: %v", err)
 				client.Close()
 				delete(h.clients, client)
 			}

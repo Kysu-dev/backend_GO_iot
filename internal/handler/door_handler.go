@@ -82,12 +82,12 @@ func (h *DoorHandler) VerifyPin(c *gin.Context) {
 
 	// Verify PIN
 	if req.Pin != pinData.UniversalPin {
-		log.Printf("[VERIFY] ❌ Invalid PIN attempt: %s", req.Pin)
+		log.Printf("[VERIFY] Invalid PIN attempt: %s", req.Pin)
 		c.JSON(401, gin.H{"success": false, "error": "Invalid PIN", "valid": false})
 		return
 	}
 
-	log.Printf("[VERIFY] ✅ Valid PIN: Sending unlock command")
+	log.Printf("[VERIFY] Valid PIN: Sending unlock command")
 
 	// Send unlock command via MQTT
 	topic := "iotcihuy/home/door/control"

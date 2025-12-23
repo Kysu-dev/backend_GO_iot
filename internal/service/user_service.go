@@ -357,11 +357,11 @@ func (s *userService) ReEnrollFace(id uint, imageBase64 string) (*models.User, e
 		client := &http.Client{}
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf("⚠️  Failed to delete old face encoding: %v\n", err)
+			fmt.Printf("Failed to delete old face encoding: %v\n", err)
 		} else {
 			defer resp.Body.Close()
-			if resp.StatusCode == 200 {
-				fmt.Printf("✅ Old face encoding deleted for user_id: %d\n", id)
+			if resp.StatusCode == http.StatusOK {
+				fmt.Printf("Old face encoding deleted for user_id: %d\n", id)
 			}
 		}
 	}
@@ -417,7 +417,7 @@ func (s *userService) ReEnrollFace(id uint, imageBase64 string) (*models.User, e
 	}
 
 	user.FaceEncodingPath = newPath
-	fmt.Printf("✅ Face re-enrolled successfully for user_id: %d, new path: %s\n", id, newPath)
+	fmt.Printf("Face re-enrolled successfully for user_id: %d, new path: %s\n", id, newPath)
 	return user, nil
 }
 
@@ -439,20 +439,19 @@ func (s *userService) Delete(id uint) error {
 		req, err := http.NewRequest("DELETE", deleteURL, nil)
 		if err != nil {
 			// Log error but continue with user deletion
-			fmt.Printf("⚠️  Failed to create request to delete face encoding: %v\n", err)
+			fmt.Printf("Failed to create request to delete face encoding: %v\n", err)
+			return err
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			// Log error but continue with user deletion
+			fmt.Printf("Failed to delete face encoding from Python service: %v\n", err)
 		} else {
-			client := &http.Client{}
-			resp, err := client.Do(req)
-			if err != nil {
-				// Log error but continue with user deletion
-				fmt.Printf("⚠️  Failed to delete face encoding from Python service: %v\n", err)
+			defer resp.Body.Close()
+			if resp.StatusCode == http.StatusOK {
+				fmt.Printf("Face encoding deleted for user_id: %d\n", id)
 			} else {
-				defer resp.Body.Close()
-				if resp.StatusCode == 200 {
-					fmt.Printf("✅ Face encoding deleted for user_id: %d\n", id)
-				} else {
-					fmt.Printf("⚠️  Python service returned status %d when deleting face\n", resp.StatusCode)
-				}
+				fmt.Printf("Python service returned status %d when deleting face\n", resp.StatusCode)
 			}
 		}
 	}

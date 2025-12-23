@@ -82,16 +82,16 @@ func main() {
 	// ------------------------------------------------------
 
 	opts.OnConnectionLost = func(c mqttLib.Client, err error) {
-		log.Println("⚠️ MQTT disconnected")
+		log.Println("MQTT disconnected")
 	}
 	opts.OnConnect = func(c mqttLib.Client) {
-		log.Println("✅ MQTT connected")
+		log.Println("MQTT connected")
 	}
 
 	mqttClient := mqttLib.NewClient(opts)
 
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatal("❌ MQTT Connection Failed:", token.Error())
+		log.Fatal("MQTT Connection Failed:", token.Error())
 	}
 
 	// 6. Init MQTT Handler

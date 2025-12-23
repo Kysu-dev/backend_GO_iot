@@ -35,7 +35,7 @@ func (s *doorService) ProcessDoor(status, method string, userID *uint) error {
 		// Belum ada data, CREATE
 		err = s.repo.Create(door)
 		if err != nil {
-			log.Printf("❌ Door error: %v", err)
+			log.Printf("Door error: %v", err)
 			return err
 		}
 		return nil
@@ -45,7 +45,7 @@ func (s *doorService) ProcessDoor(status, method string, userID *uint) error {
 	if existing != nil && existing.DoorID > 0 {
 		err = s.repo.Update(door)
 		if err != nil {
-			log.Printf("❌ Door error: %v", err)
+			log.Printf("Door error: %v", err)
 			return err
 		}
 
@@ -58,7 +58,7 @@ func (s *doorService) ProcessDoor(status, method string, userID *uint) error {
 	// Fallback: CREATE jika kondisi tidak terpenuhi
 	err = s.repo.Create(door)
 	if err != nil {
-		log.Printf("❌ Door error: %v", err)
+		log.Printf("Door error: %v", err)
 		return err
 	}
 	return nil

@@ -56,7 +56,7 @@ func (s *faceService) ProcessRecognition(req *models.FaceRecognitionRequest) err
 	if req.Recognized {
 		event.Event = "face_recognized"
 		if req.Name != nil {
-			log.Printf("[Face] ✅ Recognized: %s - %.2f%%", *req.Name, req.Confidence*100)
+			log.Printf("[Face] Recognized: %s - %.2f%%", *req.Name, req.Confidence*100)
 		}
 	} else {
 		event.Event = "unknown_face"

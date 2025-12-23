@@ -82,7 +82,7 @@ func (h *DeviceControlHandler) ControlDoor(c *gin.Context) {
 	// A. Kirim ke MQTT (Agar Alat Bergerak)
 	payload := map[string]string{"action": req.Action, "method": req.Method}
 	if err := h.publishToMQTT("iotcihuy/home/door/control", payload); err != nil {
-		log.Printf("❌ MQTT Error: %v", err)
+		log.Printf("MQTT Error: %v", err)
 		c.JSON(500, gin.H{"error": "Failed MQTT"})
 		return
 	}
@@ -115,7 +115,7 @@ func (h *DeviceControlHandler) ControlLamp(c *gin.Context) {
 	// A. Kirim ke MQTT
 	payload := map[string]string{"action": req.Action, "mode": req.Mode}
 	if err := h.publishToMQTT("iotcihuy/home/lamp/control", payload); err != nil {
-		log.Printf("❌ MQTT Error: %v", err)
+		log.Printf("MQTT Error: %v", err)
 		c.JSON(500, gin.H{"error": "Failed MQTT"})
 		return
 	}
@@ -143,7 +143,7 @@ func (h *DeviceControlHandler) ControlCurtain(c *gin.Context) {
 	// A. Kirim ke MQTT
 	payload := map[string]string{"action": req.Action, "mode": req.Mode}
 	if err := h.publishToMQTT("iotcihuy/home/curtain/control", payload); err != nil {
-		log.Printf("❌ MQTT Error: %v", err)
+		log.Printf("MQTT Error: %v", err)
 		c.JSON(500, gin.H{"error": "Failed MQTT"})
 		return
 	}
