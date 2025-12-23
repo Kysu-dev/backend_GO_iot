@@ -17,7 +17,7 @@ import (
 
 func main() {
 	log.Println("╔════════════════════════════════════════╗")
-	log.Println("║       Smart Home IoT Backend           ║")
+	log.Println("║   	 Smart Home IoT Backend           ║")
 	log.Println("╚════════════════════════════════════════╝")
 
 	// 1. Load Config & DB
@@ -150,7 +150,7 @@ func main() {
 
 	// 10. Run Server
 	log.Println("╔════════════════════════════════════════╗")
-	log.Printf("║       Server: http://localhost:%s       ║", cfg.ServerPort)
+	log.Printf("║   Server: http://localhost:%s       ║", cfg.ServerPort)
 	log.Println("╚════════════════════════════════════════╝")
 
 	r.Run(":" + cfg.ServerPort)
