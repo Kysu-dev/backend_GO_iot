@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-const defaultSensorBatchInterval = 5 * time.Second
+const defaultSensorBatchInterval = time.Minute
 
 type sensorCache struct {
 	mu sync.Mutex
