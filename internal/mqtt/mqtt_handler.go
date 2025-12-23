@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"log"
 	"smarthome-backend/internal/service"
-	"smarthome-backend/internal/websocket"
 	"sync"
 	"time"
 
@@ -21,7 +20,6 @@ type MQTTHandler struct {
 	lampSvc    service.LampService
 	curtainSvc service.CurtainService
 	pinSvc     service.PinService
-	wsHub      *websocket.Hub
 
 	// Batch sensor persistence
 	batchInterval time.Duration
@@ -59,7 +57,6 @@ func NewMQTTHandler(
 	lamp service.LampService,
 	curtain service.CurtainService,
 	pin service.PinService,
-	hub *websocket.Hub,
 ) *MQTTHandler {
 	handler := &MQTTHandler{
 		client:             client,
@@ -71,7 +68,6 @@ func NewMQTTHandler(
 		lampSvc:            lamp,
 		curtainSvc:         curtain,
 		pinSvc:             pin,
-		wsHub:              hub,
 		batchInterval:      defaultSensorBatchInterval,
 		lastBuzzerState:    "off",
 		lastLampState:      "off",
@@ -268,8 +264,6 @@ func (h *MQTTHandler) handleLight(client mqtt.Client, msg mqtt.Message) {
 
 	// Cache for batch persistence
 	h.setLatestLight(data.Lux)
-
-	h.wsHub.BroadcastData(msg.Payload())
 }
 
 // IMPROVED GAS HANDLER WITH MOVING AVERAGE
@@ -305,8 +299,6 @@ func (h *MQTTHandler) handleGas(client mqtt.Client, msg mqtt.Message) {
 	} else {
 		h.setLatestGas(data.PPM)
 	}
-
-	h.wsHub.BroadcastData(msg.Payload())
 }
 
 func (h *MQTTHandler) handleTemperature(client mqtt.Client, msg mqtt.Message) {
@@ -323,7 +315,6 @@ func (h *MQTTHandler) handleTemperature(client mqtt.Client, msg mqtt.Message) {
 
 	log.Printf("[MQTT] Temperature: %.1f°C", data.Temperature)
 	h.setLatestTemperature(data.Temperature)
-	h.wsHub.BroadcastData(msg.Payload())
 }
 
 func (h *MQTTHandler) handleHumidity(client mqtt.Client, msg mqtt.Message) {
@@ -338,7 +329,6 @@ func (h *MQTTHandler) handleHumidity(client mqtt.Client, msg mqtt.Message) {
 
 	log.Printf("Humidity: %.1f%%", data.Humidity)
 	h.setLatestHumidity(data.Humidity)
-	h.wsHub.BroadcastData(msg.Payload())
 }
 
 // ==================== DEVICE STATUS HANDLERS ====================
@@ -383,15 +373,6 @@ func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
 
 	// FORCE publish gas = 0 when lamp ON (EMI noise prevention)
 	if req.Status == "on" {
-		gasForcedZero := map[string]interface{}{
-			"type":     "sensor_update",
-			"sensor":   "gas",
-			"ppm":      0,
-			"unit":     "PPM",
-			"enforced": "lamp_stabilization",
-		}
-		jsonData, _ := json.Marshal(gasForcedZero)
-		h.wsHub.BroadcastData(jsonData)
 		log.Printf("Gas: FORCED 0 PPM (Lamp ON - stabilization period)")
 	}
 
@@ -400,15 +381,6 @@ func (h *MQTTHandler) handleLampStatus(client mqtt.Client, msg mqtt.Message) {
 		go h.lampSvc.ProcessLamp(req.Status, req.Mode)
 		log.Printf("Lamp: %s (mode: %s)", req.Status, req.Mode)
 	}
-
-	wsData := map[string]interface{}{
-		"type":   "device_update",
-		"device": "lamp",
-		"state":  req.Status == "on",
-		"mode":   req.Mode,
-	}
-	jsonData, _ := json.Marshal(wsData)
-	h.wsHub.BroadcastData(jsonData)
 }
 
 func (h *MQTTHandler) handleDoorStatus(client mqtt.Client, msg mqtt.Message) {
@@ -434,15 +406,6 @@ func (h *MQTTHandler) handleDoorStatus(client mqtt.Client, msg mqtt.Message) {
 	if req.Status == "unlocked" {
 		log.Printf("Door Access: %s", req.Method)
 	}
-
-	wsData := map[string]interface{}{
-		"type":   "device_update",
-		"device": "door",
-		"locked": req.Status == "locked",
-		"method": req.Method,
-	}
-	jsonData, _ := json.Marshal(wsData)
-	h.wsHub.BroadcastData(jsonData)
 }
 
 func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) {
@@ -474,15 +437,6 @@ func (h *MQTTHandler) handleCurtainStatus(client mqtt.Client, msg mqtt.Message) 
 	if statusChanged || modeChanged {
 		log.Printf("Curtain: %s (mode: %s)", req.Status, req.Mode)
 	}
-
-	wsData := map[string]interface{}{
-		"type":   "device_update",
-		"device": "curtain",
-		"status": req.Status,
-		"mode":   req.Mode,
-	}
-	jsonData, _ := json.Marshal(wsData)
-	h.wsHub.BroadcastData(jsonData)
 }
 
 func (h *MQTTHandler) handleDebug(client mqtt.Client, msg mqtt.Message) {
