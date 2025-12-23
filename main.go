@@ -51,10 +51,6 @@ func main() {
 
 	// Server Python Face Rec
 	authSvc := service.NewAuthService("http://192.168.1.48:5001", "jwt-secret-key")
-
-	// =========================================================================
-	// 5. SETUP MQTT CLIENT (OPTIMALISASI HIVEMQ)
-	// =========================================================================
 	opts := mqttLib.NewClientOptions()
 	opts.AddBroker(cfg.MQTTBroker) // Pastikan config isinya: tcp://broker.hivemq.com:1883
 
