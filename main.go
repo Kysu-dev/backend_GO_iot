@@ -17,7 +17,7 @@ import (
 
 func main() {
 	log.Println("╔════════════════════════════════════════╗")
-	log.Println("║   🏠 Smart Home IoT Backend           ║")
+	log.Println("║       Smart Home IoT Backend           ║")
 	log.Println("╚════════════════════════════════════════╝")
 
 	// 1. Load Config & DB
@@ -126,6 +126,7 @@ func main() {
 
 	faceHandler := handler.NewFaceHandler(accessLogSvc, mqttClient)
 	sensorAnalyticsHandler := handler.NewSensorAnalyticsHandler(sensorAnalyticsSvc)
+	dashboardHandler := handler.NewDashboardHandler(tempSvc, humidSvc, gasSvc, lightSvc, lampSvc, doorSvc, curtainSvc)
 
 	// 9. Router Configuration
 	routerCfg := router.AppConfig{
@@ -143,12 +144,13 @@ func main() {
 		AdminHandler:           adminHandler,
 		DeviceControlHandler:   deviceControlHandler,
 		FaceHandler:            faceHandler,
+		DashboardHandler:       dashboardHandler,
 	}
 	r := router.InitRouter(routerCfg)
 
 	// 10. Run Server
 	log.Println("╔════════════════════════════════════════╗")
-	log.Printf("║  🚀 Server: http://localhost:%s       ║", cfg.ServerPort)
+	log.Printf("║       Server: http://localhost:%s       ║", cfg.ServerPort)
 	log.Println("╚════════════════════════════════════════╝")
 
 	r.Run(":" + cfg.ServerPort)

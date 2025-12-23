@@ -32,6 +32,9 @@ type AppConfig struct {
 
 	// Face Recognition Handler
 	FaceHandler *handler.FaceHandler
+
+	// Dashboard Handler
+	DashboardHandler *handler.DashboardHandler
 }
 
 func InitRouter(cfg AppConfig) *gin.Engine {
@@ -103,6 +106,9 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 	// API Routes
 	api := r.Group("/api")
 	{
+		// ==================== DASHBOARD ENDPOINT ====================
+		api.GET("/dashboard/initial", cfg.DashboardHandler.GetInitialData)
+
 		// ==================== SENSOR ENDPOINTS ====================
 		sensor := api.Group("/sensor")
 		{
