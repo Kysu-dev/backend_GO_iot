@@ -11,7 +11,6 @@ import (
 	"smarthome-backend/internal/repository"
 	"smarthome-backend/internal/router"
 	"smarthome-backend/internal/service"
-	"smarthome-backend/internal/websocket"
 
 	mqttLib "github.com/eclipse/paho.mqtt.golang"
 )
@@ -25,11 +24,7 @@ func main() {
 	cfg := config.LoadConfig()
 	db := config.InitDB()
 
-	// 2. Init WebSocket
-	wsHub := websocket.NewHub()
-	go wsHub.Run()
-
-	// 3. Init Repositories
+	// 2. Init Repositories
 	gasRepo := repository.NewGasRepository(db)
 	tempRepo := repository.NewTempRepository(db)
 	humidRepo := repository.NewHumidRepository(db)
@@ -39,7 +34,6 @@ func main() {
 	curtainRepo := repository.NewCurtainRepository(db)
 	userRepo := repository.NewUserRepository(db)
 	accessLogRepo := repository.NewAccessLogRepository(db)
-	notifRepo := repository.NewNotificationRepository(db)
 	pinRepo := repository.NewPinRepository(db)
 
 	// 4. Init Services
@@ -52,7 +46,6 @@ func main() {
 	curtainSvc := service.NewCurtainService(curtainRepo)
 	userSvc := service.NewUserService(userRepo)
 	accessLogSvc := service.NewAccessLogService(accessLogRepo)
-	notifSvc := service.NewNotificationService(notifRepo)
 	pinSvc := service.NewPinService(pinRepo)
 	sensorAnalyticsSvc := service.NewSensorAnalyticsService(db)
 
@@ -105,7 +98,6 @@ func main() {
 		lampSvc,
 		curtainSvc,
 		pinSvc,
-		wsHub,
 	)
 
 	// 7. Setup Routes (Subscribe Topik)
@@ -121,7 +113,6 @@ func main() {
 	curtainHandler := handler.NewCurtainHandler(curtainSvc)
 	userHandler := handler.NewUserHandler(userSvc)
 	accessLogHandler := handler.NewAccessLogHandler(accessLogSvc)
-	notifHandler := handler.NewNotificationHandler(notifSvc)
 	authHandler := handler.NewAuthHandler(userSvc, authSvc)
 	adminHandler := handler.NewAdminHandler(pinSvc, userSvc)
 
@@ -148,12 +139,10 @@ func main() {
 		CurtainHandler:         curtainHandler,
 		UserHandler:            userHandler,
 		AccessLogHandler:       accessLogHandler,
-		NotificationHandler:    notifHandler,
 		AuthHandler:            authHandler,
 		AdminHandler:           adminHandler,
 		DeviceControlHandler:   deviceControlHandler,
 		FaceHandler:            faceHandler,
-		WsHub:                  wsHub,
 	}
 	r := router.InitRouter(routerCfg)
 

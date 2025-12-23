@@ -2,7 +2,6 @@ package router
 
 import (
 	"smarthome-backend/internal/handler"
-	"smarthome-backend/internal/websocket"
 	"time"
 
 	"github.com/gin-contrib/cors"
@@ -28,17 +27,11 @@ type AppConfig struct {
 	AuthHandler      *handler.AuthHandler
 	AdminHandler     *handler.AdminHandler
 
-	// Notification Handler
-	NotificationHandler *handler.NotificationHandler
-
 	// Device Control Handler
 	DeviceControlHandler *handler.DeviceControlHandler
 
 	// Face Recognition Handler
 	FaceHandler *handler.FaceHandler
-
-	// WebSocket Hub
-	WsHub *websocket.Hub
 }
 
 func InitRouter(cfg AppConfig) *gin.Engine {
@@ -219,14 +212,6 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			accessLog.GET("/status/:status", cfg.AccessLogHandler.GetByStatus)
 		}
 
-		// ==================== NOTIFICATION ENDPOINTS ====================
-		notification := api.Group("/notification")
-		{
-			notification.POST("/", cfg.NotificationHandler.Create)
-			notification.GET("/", cfg.NotificationHandler.GetAll)
-			notification.GET("/type/:type", cfg.NotificationHandler.GetByType)
-		}
-
 		// ==================== FACE RECOGNITION ENDPOINTS ====================
 		face := api.Group("/face")
 		{
@@ -235,9 +220,6 @@ func InitRouter(cfg AppConfig) *gin.Engine {
 			face.POST("/reload", cfg.FaceHandler.ReloadFaces)
 			face.GET("/logs", cfg.FaceHandler.GetAccessLogs)
 		}
-
-		// ==================== WEBSOCKET ENDPOINT ====================
-		api.GET("/ws", cfg.WsHub.HandleWebSocket)
 	}
 
 	return r
