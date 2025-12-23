@@ -9,7 +9,11 @@ type SensorTemperature struct {
 	Timestamp   time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"timestamp"`
 }
 
+func (SensorTemperature) TableName() string {
+	return "sensor_temperature"
+}
 // TempRequest for submitting temperature data
 type TempRequest struct {
 	Temperature float64 `json:"temperature" binding:"required"`
 }
+

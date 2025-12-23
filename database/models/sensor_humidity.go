@@ -9,6 +9,10 @@ type SensorHumidity struct {
 	Timestamp time.Time `gorm:"default:CURRENT_TIMESTAMP" json:"timestamp"`
 }
 
+func (SensorHumidity) TableName() string {
+	return "sensor_humidity"
+}
+
 // HumidRequest for submitting humidity data
 type HumidRequest struct {
 	Humidity float64 `json:"humidity" binding:"required"`
