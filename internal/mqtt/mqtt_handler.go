@@ -106,6 +106,7 @@ func (h *MQTTHandler) SetupRoutes(client mqtt.Client) {
 		"iotcihuy/home/door/verify":    h.handlePinVerification,
 		"iotcihuy/home/curtain/status": h.handleCurtainStatus,
 		"iotcihuy/home/debug":          h.handleDebug,
+		"iotcihuy/home/camera/ip": h.handleCameraIP,
 	}
 
 	log.Printf("[MQTT] Connecting to broker... (Client connected: %v)", client.IsConnected())
@@ -497,4 +498,18 @@ func (h *MQTTHandler) publishPinVerificationResponse(valid bool, message string)
 
 	token := h.client.Publish(topic, 1, false, jsonPayload)
 	token.Wait()
+}
+
+// ==================== CAMERA HANDLER ====================
+
+func (h *MQTTHandler) handleCameraIP(client mqtt.Client, msg mqtt.Message) {
+	// IP diterima dalam bentuk raw string dari ESP32
+	ipAddress := string(msg.Payload())
+
+	// Log IP ke terminal agar mudah di-copy
+	log.Printf("------------------------------------------------")
+	log.Printf("[CAMERA] ESP32-CAM ONLINE / IP CHANGED")
+	log.Printf("[CAMERA] Stream URL : http://%s", ipAddress)
+	log.Printf("[CAMERA] Still Image: http://%s/capture", ipAddress)
+	log.Printf("------------------------------------------------")
 }
