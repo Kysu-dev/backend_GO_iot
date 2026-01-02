@@ -17,7 +17,7 @@ import (
 
 func main() {
 	log.Println("╔════════════════════════════════════════╗")
-	log.Println("║   	 Smart Home IoT Backend           ║")
+	log.Println("║       Smart Home IoT Backend           ║")
 	log.Println("╚════════════════════════════════════════╝")
 
 	// 1. Load Config & DB
@@ -49,38 +49,42 @@ func main() {
 	pinSvc := service.NewPinService(pinRepo)
 	sensorAnalyticsSvc := service.NewSensorAnalyticsService(db)
 
-	// Server Python Face Rec
-	authSvc := service.NewAuthService("http://192.168.1.48:5001", "jwt-secret-key")
-	opts := mqttLib.NewClientOptions()
-	opts.AddBroker(cfg.MQTTBroker) // Pastikan config isinya: tcp://broker.hivemq.com:1883
+	// =================================================================
+	// [KEMBALI KE LAMA] Hardcode URL & Secret (Supaya tidak Error Config)
+	// =================================================================
+	authSvc := service.NewAuthService("http://192.168.1.113:5001", "jwt-secret-key")
 
-	// --- A. ID UNIK (PENTING) ---
-	// Menggunakan Nano Second agar ID selalu beda tiap kali run.
-	// Ini mencegah error "Connection Lost" karena rebutan ID.
+	// ================= SETUP MQTT (HiveMQ) =================
+	opts := mqttLib.NewClientOptions()
+
+	// Mengambil Broker dari .env (tcp://broker.hivemq.com:1883)
+	// Jika error "cfg.MQTTBroker undefined", ganti baris ini dengan string langsung:
+	// opts.AddBroker("tcp://broker.hivemq.com:1883")
+	opts.AddBroker(cfg.MQTTBroker) 
+	
+	// ID Unik Random
 	randomID := fmt.Sprintf("backend_%d", time.Now().UnixNano())
 	opts.SetClientID(randomID)
 
 	opts.SetCleanSession(true)
 	opts.SetAutoReconnect(true)
 
-	// --- B. SETTINGAN ANTI-PUTUS (PENTING UNTUK HIVEMQ) ---
-	// HiveMQ publik kadang lambat responnya. Kita perpanjang waktu tunggunya.
-	opts.SetKeepAlive(60 * time.Second)    // Kirim sinyal "Saya Hidup" tiap 60 detik
-	opts.SetPingTimeout(10 * time.Second)  // Tunggu balasan server 10 detik (Default cuma 2s)
-	opts.SetWriteTimeout(10 * time.Second) // Tunggu proses kirim data 10 detik
-	// ------------------------------------------------------
+	// Settingan Anti-Putus
+	opts.SetKeepAlive(60 * time.Second)
+	opts.SetPingTimeout(10 * time.Second)
+	opts.SetWriteTimeout(10 * time.Second)
 
 	opts.OnConnectionLost = func(c mqttLib.Client, err error) {
-		log.Println("MQTT disconnected")
+		log.Printf("[MQTT] Connection Lost: %v", err)
 	}
 	opts.OnConnect = func(c mqttLib.Client) {
-		log.Println("MQTT connected")
+		log.Println("[MQTT] Connected successfully to HiveMQ!")
 	}
 
 	mqttClient := mqttLib.NewClient(opts)
 
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatal("MQTT Connection Failed:", token.Error())
+		log.Fatal("[MQTT] Connection Failed:", token.Error())
 	}
 
 	// 6. Init MQTT Handler
@@ -96,7 +100,7 @@ func main() {
 		pinSvc,
 	)
 
-	// 7. Setup Routes (Subscribe Topik)
+	// 7. Setup Routes
 	mqttH.SetupRoutes(mqttClient)
 
 	// 8. Init Handlers (HTTP)
@@ -112,7 +116,6 @@ func main() {
 	authHandler := handler.NewAuthHandler(userSvc, authSvc)
 	adminHandler := handler.NewAdminHandler(pinSvc, userSvc)
 
-	// --- Device Handler (Lengkap 4 Parameter) ---
 	deviceControlHandler := handler.NewDeviceControlHandler(
 		mqttClient,
 		lampSvc,
@@ -146,7 +149,7 @@ func main() {
 
 	// 10. Run Server
 	log.Println("╔════════════════════════════════════════╗")
-	log.Printf("║   Server: http://localhost:%s       ║", cfg.ServerPort)
+	log.Printf("║   Server Running: http://localhost:%s   ║", cfg.ServerPort)
 	log.Println("╚════════════════════════════════════════╝")
 
 	r.Run(":" + cfg.ServerPort)
