@@ -7,7 +7,8 @@ import (
 )
 
 type GasService interface {
-	ProcessGas(ppm int) error
+	// UPDATE: Tambahkan string di return value
+	ProcessGas(ppm int) (string, error)
 	GetHistory(limit int) ([]models.SensorGas, error)
 	GetLatest() (*models.SensorGas, error)
 }
@@ -20,12 +21,15 @@ func NewGasService(repo repository.GasRepository) GasService {
 	return &gasService{repo: repo}
 }
 
-func (s *gasService) ProcessGas(ppm int) error {
+// UPDATE: Return string status
+func (s *gasService) ProcessGas(ppm int) (string, error) {
 	status := "normal"
-	if ppm > 500 {
+	
+	// Logic Penentuan Bahaya
+	if ppm > 200 {
 		status = "warning"
 	}
-	if ppm > 1000 {
+	if ppm > 500 {
 		status = "danger"
 	}
 
@@ -34,7 +38,8 @@ func (s *gasService) ProcessGas(ppm int) error {
 		Status:    status,
 		Timestamp: time.Now(),
 	}
-	return s.repo.Save(&data)
+
+	return status, s.repo.Save(&data)
 }
 
 func (s *gasService) GetHistory(limit int) ([]models.SensorGas, error) {

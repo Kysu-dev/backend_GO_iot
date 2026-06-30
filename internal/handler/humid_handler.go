@@ -27,7 +27,7 @@ func (h *HumidHandler) Create(c *gin.Context) {
 }
 
 func (h *HumidHandler) GetAll(c *gin.Context) {
-	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "10"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "1"))
 	data, _ := h.svc.GetHistory(limit)
 	c.JSON(200, gin.H{"data": data})
 }

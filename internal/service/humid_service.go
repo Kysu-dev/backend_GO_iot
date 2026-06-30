@@ -8,7 +8,7 @@ import (
 
 type HumidService interface {
 	ProcessHumid(humidity float64) error
-	GetHistory(limit int) ([]models.SensorHumid, error)
+	GetHistory(limit int) ([]models.SensorHumidity, error)
 }
 
 type humidService struct {
@@ -20,13 +20,13 @@ func NewHumidService(repo repository.HumidRepository) HumidService {
 }
 
 func (s *humidService) ProcessHumid(humidity float64) error {
-	data := models.SensorHumid{
+	data := models.SensorHumidity{
 		Humidity:  humidity,
 		Timestamp: time.Now(),
 	}
 	return s.repo.Save(&data)
 }
 
-func (s *humidService) GetHistory(limit int) ([]models.SensorHumid, error) {
+func (s *humidService) GetHistory(limit int) ([]models.SensorHumidity, error) {
 	return s.repo.GetAll(limit)
 }

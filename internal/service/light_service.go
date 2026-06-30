@@ -8,6 +8,7 @@ import (
 
 type LightService interface {
 	ProcessLight(lux int) error
+	GetLatest() (*models.SensorLight, error)
 	GetHistory(limit int) ([]models.SensorLight, error)
 }
 
@@ -25,6 +26,10 @@ func (s *lightService) ProcessLight(lux int) error {
 		Timestamp: time.Now(),
 	}
 	return s.repo.Save(&data)
+}
+
+func (s *lightService) GetLatest() (*models.SensorLight, error) {
+	return s.repo.GetLatest()
 }
 
 func (s *lightService) GetHistory(limit int) ([]models.SensorLight, error) {

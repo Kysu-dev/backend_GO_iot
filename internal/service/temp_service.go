@@ -8,7 +8,7 @@ import (
 
 type TempService interface {
 	ProcessTemp(temperature float64) error
-	GetHistory(limit int) ([]models.SensorTemp, error)
+	GetHistory(limit int) ([]models.SensorTemperature, error)
 }
 
 type tempService struct {
@@ -20,13 +20,13 @@ func NewTempService(repo repository.TempRepository) TempService {
 }
 
 func (s *tempService) ProcessTemp(temperature float64) error {
-	data := models.SensorTemp{
+	data := models.SensorTemperature{
 		Temperature: temperature,
 		Timestamp:   time.Now(),
 	}
 	return s.repo.Save(&data)
 }
 
-func (s *tempService) GetHistory(limit int) ([]models.SensorTemp, error) {
+func (s *tempService) GetHistory(limit int) ([]models.SensorTemperature, error) {
 	return s.repo.GetAll(limit)
 }
