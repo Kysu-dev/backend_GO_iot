@@ -1,13 +1,15 @@
 package repository
 
 import (
-	"smarthome-backend/database/models" // <--- Import dari folder database
+	"smarthome-backend/database/models"
+
 	"gorm.io/gorm"
 )
 
 type GasRepository interface {
 	Save(data *models.SensorGas) error
 	GetAll(limit int) ([]models.SensorGas, error)
+	GetLatest() (*models.SensorGas, error)
 }
 
 type gasRepository struct {
@@ -30,4 +32,12 @@ func (r *gasRepository) GetAll(limit int) ([]models.SensorGas, error) {
 	query := "SELECT * FROM sensor_gas ORDER BY timestamp DESC LIMIT ?"
 	err := r.db.Raw(query, limit).Scan(&results).Error
 	return results, err
+}
+
+// Select data terbaru
+func (r *gasRepository) GetLatest() (*models.SensorGas, error) {
+	var result models.SensorGas
+	query := "SELECT * FROM sensor_gas ORDER BY timestamp DESC LIMIT 1"
+	err := r.db.Raw(query).Scan(&result).Error
+	return &result, err
 }

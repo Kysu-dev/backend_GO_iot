@@ -10,6 +10,7 @@ type GasService interface {
 	// UPDATE: Tambahkan string di return value
 	ProcessGas(ppm int) (string, error)
 	GetHistory(limit int) ([]models.SensorGas, error)
+	GetLatest() (*models.SensorGas, error)
 }
 
 type gasService struct {
@@ -43,4 +44,9 @@ func (s *gasService) ProcessGas(ppm int) (string, error) {
 
 func (s *gasService) GetHistory(limit int) ([]models.SensorGas, error) {
 	return s.repo.GetAll(limit)
+}
+
+// function to get latest gas data
+func (s *gasService) GetLatest() (*models.SensorGas, error) {
+	return s.repo.GetLatest()
 }
